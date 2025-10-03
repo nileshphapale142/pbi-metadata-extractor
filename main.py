@@ -1,15 +1,43 @@
 import zipfile
 import os
 import json
+import csv
 from datetime import datetime
 
-def parse_visual_containers(layout_json, log_file):
+# Power BI data type codes mapping
+POWERBI_TYPE_CODES = {
+    1: "Text",
+    2: "Whole Number",
+    3: "Date/Time",
+    259: "Decimal Number",
+    519: "Date",
+    520: "Time",
+    2048: "Text (Category)",
+    260: "Currency",
+    261: "Boolean",
+    262: "Binary"
+}
+
+def get_type_name(type_code):
+    """
+    Convert Power BI type code to readable type name.
+    
+    Args:
+        type_code: Numeric type code from Power BI
+    
+    Returns:
+        String representation of the type
+    """
+    return POWERBI_TYPE_CODES.get(type_code, f"Type Code {type_code}")
+
+def parse_visual_containers(layout_json, log_file, csv_file_path):
     """
     Parse visual containers from layout JSON and extract columns and measures used in visuals.
     
     Args:
         layout_json: Parsed JSON object containing layout information
         log_file: File handle to write output
+        csv_file_path: Path to CSV file for visual data
     """
     try:
         sections = layout_json.get("sections", [])
@@ -20,15 +48,38 @@ def parse_visual_containers(layout_json, log_file):
         
         total_visuals = 0
         
+        # Prepare CSV data
+        csv_data = []
+        
         for section_idx, section in enumerate(sections):
             section_name = section.get("displayName", f"Section {section_idx + 1}")
             visual_containers = section.get("visualContainers", [])
             
+            # Count visuals with projections first
+            visuals_with_projections = []
+            for visual in visual_containers:
+                config_str = visual.get("config", "{}")
+                try:
+                    config = json.loads(config_str)
+                    single_visual = config.get("singleVisual", {})
+                    projections = single_visual.get("projections", {})
+                    
+                    # Check if projections exist and are not empty
+                    has_projections = projections and any(projections.values())
+                    if has_projections:
+                        visuals_with_projections.append(visual)
+                except json.JSONDecodeError:
+                    continue
+            
+            # Only write section header if there are visuals with projections
+            if not visuals_with_projections:
+                continue
+                
             log_file.write(f"\nSection: {section_name}\n")
             log_file.write(f"{'-'*80}\n")
-            log_file.write(f"Total Visuals: {len(visual_containers)}\n\n")
+            log_file.write(f"Total Visuals with Projections: {len(visuals_with_projections)}\n\n")
             
-            for visual_idx, visual in enumerate(visual_containers):
+            for visual_idx, visual in enumerate(visuals_with_projections):
                 total_visuals += 1
                 visual_id = visual.get("id", "Unknown")
                 
@@ -37,7 +88,6 @@ def parse_visual_containers(layout_json, log_file):
                 try:
                     config = json.loads(config_str)
                 except json.JSONDecodeError:
-                    log_file.write(f"Visual #{visual_idx + 1} (ID: {visual_id}) - Unable to parse config\n\n")
                     continue
                 
                 visual_name = config.get("name", "Unnamed")
@@ -51,21 +101,26 @@ def parse_visual_containers(layout_json, log_file):
                 log_file.write(f"  Type: {visual_type}\n")
                 
                 # Extract columns and measures from projections
-                if projections:
-                    log_file.write(f"  Projections:\n")
-                    
-                    for proj_type, proj_items in projections.items():
-                        if proj_items:
-                            log_file.write(f"    {proj_type}:\n")
-                            for item in proj_items:
-                                query_ref = item.get("queryRef", "N/A")
-                                active = item.get("active", True)
-                                log_file.write(f"      - {query_ref} (Active: {active})\n")
-                else:
-                    log_file.write(f"  Projections: None\n")
+                log_file.write(f"  Projections:\n")
+                
+                # Collect projection data
+                projection_details = []
+                for proj_type, proj_items in projections.items():
+                    if proj_items:
+                        log_file.write(f"    {proj_type}:\n")
+                        for item in proj_items:
+                            query_ref = item.get("queryRef", "N/A")
+                            active = item.get("active", True)
+                            log_file.write(f"      - {query_ref} (Active: {active})\n")
+                            projection_details.append({
+                                "projection_type": proj_type,
+                                "query_ref": query_ref,
+                                "active": active
+                            })
                 
                 # Parse dataTransforms if available for additional metadata
                 data_transforms_str = visual.get("dataTransforms", "{}")
+                field_details = []
                 try:
                     data_transforms = json.loads(data_transforms_str)
                     selects = data_transforms.get("selects", [])
@@ -79,20 +134,85 @@ def parse_visual_containers(layout_json, log_file):
                             underlying_type = field_type.get("underlyingType", "N/A")
                             format_info = select.get("format", "N/A")
                             
-                            log_file.write(f"    - Display Name: {display_name}\n")
-                            log_file.write(f"      Query Name: {query_name}\n")
-                            log_file.write(f"      Type: {underlying_type}\n")
-                            if format_info != "N/A":
-                                log_file.write(f"      Format: {format_info}\n")
+                            # Convert type code to type name
+                            if underlying_type != "N/A":
+                                type_name = get_type_name(underlying_type)
+                            else:
+                                type_name = "N/A"
                             
                             # Check if it's a measure (aggregation)
                             expr = select.get("expr", {})
+                            aggregation_func = ""
+                            is_measure = False
                             if "Aggregation" in expr:
                                 agg_func = expr["Aggregation"].get("Function", "Unknown")
-                                log_file.write(f"      Aggregation: Function {agg_func}\n")
+                                aggregation_func = f"Function {agg_func}"
+                                is_measure = True
+                            
+                            log_file.write(f"    - Display Name: {display_name}\n")
+                            log_file.write(f"      Query Name: {query_name}\n")
+                            log_file.write(f"      Type: {type_name}\n")
+                            if format_info != "N/A":
+                                log_file.write(f"      Format: {format_info}\n")
+                            if aggregation_func:
+                                log_file.write(f"      Aggregation: {aggregation_func}\n")
+                            
+                            field_details.append({
+                                "display_name": display_name,
+                                "query_name": query_name,
+                                "type": type_name,
+                                "format": format_info,
+                                "aggregation": aggregation_func,
+                                "is_measure": is_measure
+                            })
                             
                 except json.JSONDecodeError:
                     pass
+                
+                # Add data to CSV
+                # For each field in the visual, create a CSV row
+                if field_details:
+                    for field in field_details:
+                        # Find matching projection
+                        matching_projection = None
+                        for proj in projection_details:
+                            if field["query_name"] in proj["query_ref"]:
+                                matching_projection = proj
+                                break
+                        
+                        csv_row = {
+                            "Section Name": section_name,
+                            "Visual ID": visual_id,
+                            "Visual Name": visual_name,
+                            "Visual Type": visual_type,
+                            "Field Display Name": field["display_name"],
+                            "Field Query Name": field["query_name"],
+                            "Field Type": field["type"],
+                            "Field Format": field["format"] if field["format"] != "N/A" else "",
+                            "Is Measure": "Yes" if field["is_measure"] else "No",
+                            "Aggregation": field["aggregation"],
+                            "Projection Type": matching_projection["projection_type"] if matching_projection else "",
+                            "Active": matching_projection["active"] if matching_projection else ""
+                        }
+                        csv_data.append(csv_row)
+                else:
+                    # If no field details, add basic visual info
+                    for proj in projection_details:
+                        csv_row = {
+                            "Section Name": section_name,
+                            "Visual ID": visual_id,
+                            "Visual Name": visual_name,
+                            "Visual Type": visual_type,
+                            "Field Display Name": "",
+                            "Field Query Name": proj["query_ref"],
+                            "Field Type": "",
+                            "Field Format": "",
+                            "Is Measure": "",
+                            "Aggregation": "",
+                            "Projection Type": proj["projection_type"],
+                            "Active": proj["active"]
+                        }
+                        csv_data.append(csv_row)
                 
                 log_file.write(f"\n")
         
@@ -100,14 +220,29 @@ def parse_visual_containers(layout_json, log_file):
         log_file.write(f"SUMMARY\n")
         log_file.write(f"{'='*80}\n")
         log_file.write(f"Total Sections: {len(sections)}\n")
-        log_file.write(f"Total Visuals Analyzed: {total_visuals}\n")
+        log_file.write(f"Total Visuals with Projections: {total_visuals}\n")
         log_file.write(f"{'='*80}\n")
+        
+        # Write CSV file
+        if csv_data:
+            with open(csv_file_path, 'w', newline='', encoding='utf-8') as csv_file:
+                fieldnames = [
+                    "Section Name", "Visual ID", "Visual Name", "Visual Type",
+                    "Field Display Name", "Field Query Name", "Field Type", "Field Format",
+                    "Is Measure", "Aggregation", "Projection Type", "Active"
+                ]
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(csv_data)
+            
+            print(f"CSV file created: {csv_file_path}")
+            log_file.write(f"\nCSV file created: {csv_file_path}\n")
         
     except Exception as e:
         log_file.write(f"\nError parsing visual containers: {str(e)}\n")
 
 
-def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
+def extract_pbix_contents(pbix_file_path, output_log_path="output.log", output_csv_path="visuals_data.csv"):
     """
     Reads a PBIX file as a ZIP archive and lists all files with their paths.
     Writes the output to a log file.
@@ -115,6 +250,7 @@ def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
     Args:
         pbix_file_path: Path to the PBIX file
         output_log_path: Path to the output log file (default: output.log)
+        output_csv_path: Path to the output CSV file (default: visuals_data.csv)
     """
     try:
         # Check if PBIX file exists
@@ -221,7 +357,7 @@ def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
                 
                 # Parse visual containers if layout JSON was successfully loaded
                 if layout_json:
-                    parse_visual_containers(layout_json, log_file)
+                    parse_visual_containers(layout_json, log_file, output_csv_path)
         
         print(f"Analysis complete! Output written to: {output_log_path}")
         
@@ -233,7 +369,8 @@ def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
 # Example usage
 if __name__ == "__main__":
     # Specify your PBIX file path
-    pbix_path = "./data/Components requirements next 12 weeks by ORDERING plant.pbix"  # Change this to your PBIX file path
-    output_path = "output.log"
+    pbix_path = "./data/Components requirements next 12 weeks by ORDERING plant.pbix"
+    output_log = "output.log"
+    output_csv = "visuals_data.csv"
     
-    extract_pbix_contents(pbix_path, output_path)
+    extract_pbix_contents(pbix_path, output_log, output_csv)

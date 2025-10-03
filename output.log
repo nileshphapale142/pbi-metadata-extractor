@@ -1,7 +1,7 @@
 PBIX File Analysis Report
 ================================================================================
 File: ./data/Components requirements next 12 weeks by ORDERING plant.pbix
-Timestamp: 2025-10-03 14:04:18
+Timestamp: 2025-10-03 14:20:37
 ================================================================================
 
 Total files found: 8
@@ -232,45 +232,9 @@ VISUAL ANALYSIS - COLUMNS AND MEASURES
 
 Section: Page 1
 --------------------------------------------------------------------------------
-Total Visuals: 12
+Total Visuals with Projections: 4
 
 Visual #1
-  ID: 4102443137
-  Name: 6bb72f6b0d75c08cd070
-  Type: shape
-  Projections: None
-
-Visual #2
-  ID: 4102443138
-  Name: e7b647ada1336e38cc6e
-  Type: textbox
-  Projections: None
-
-Visual #3
-  ID: 4102443139
-  Name: 4fbcd0b064ee0207a802
-  Type: image
-  Projections: None
-
-Visual #4
-  ID: 4102443140
-  Name: aa7d3d8d53a668ba7a62
-  Type: shape
-  Projections: None
-
-Visual #5
-  ID: 4102443141
-  Name: 367557ca4ee202c6430d
-  Type: shape
-  Projections: None
-
-Visual #6
-  ID: 4102443142
-  Name: 53f33193ee21954b96a7
-  Type: textbox
-  Projections: None
-
-Visual #7
   ID: 4102443143
   Name: cfb1ad64c02ab8363085
   Type: card
@@ -280,10 +244,10 @@ Visual #7
   Fields Details:
     - Display Name: First DATA_REFRESHED_DATE
       Query Name: Min(Data Refreshed Date.DATA_REFRESHED_DATE)
-      Type: 1
+      Type: Text
       Aggregation: Function 3
 
-Visual #8
+Visual #2
   ID: 4102443144
   Name: bc279458b8867e9c7300
   Type: pivotTable
@@ -304,39 +268,39 @@ Visual #8
   Fields Details:
     - Display Name: Part ID
       Query Name: ‎CCTR - LTP Data.Part ID
-      Type: 1
+      Type: Text
     - Display Name: Material
       Query Name: CCTR - Material.Material ID
-      Type: 1
+      Type: Text
     - Display Name: Description
       Query Name: CCTR - Material.Material DESC
-      Type: 1
+      Type: Text
     - Display Name: Req Date
       Query Name: CCTR - Requirement Dates.Req Date
-      Type: 519
+      Type: Date
       Format: yyyy-MM-dd
     - Display Name: Sum of Requirement Qty
       Query Name: Sum(‎CCTR - LTP Data.Requirement Qty)
-      Type: 259
+      Type: Decimal Number
       Format: 0.0
       Aggregation: Function 0
     - Display Name: Link
       Query Name: ‎CCTR - LTP Data.Link
-      Type: 1
+      Type: Text
     - Display Name: Inhouse Indicator
       Query Name: ‎CCTR - LTP Data.Inhouse Indicator
-      Type: 1
+      Type: Text
     - Display Name: Ordering Plant
       Query Name: ‎CCTR - LTP Data.Ordering Plant
-      Type: 1
+      Type: Text
     - Display Name: BUM
       Query Name: ‎CCTR - LTP Data.Base Unit
-      Type: 1
+      Type: Text
     - Display Name: Plant
       Query Name: CCTR - Facility.Plant ID
-      Type: 1
+      Type: Text
 
-Visual #9
+Visual #3
   ID: 4102443145
   Name: c56db9153989b3b56601
   Type: slicer
@@ -346,9 +310,9 @@ Visual #9
   Fields Details:
     - Display Name: Select Plant
       Query Name: CCTR - Facility.Plant DESC
-      Type: 1
+      Type: Text
 
-Visual #10
+Visual #4
   ID: 4102443146
   Name: c07ff3d9511cdcffc302
   Type: slicer
@@ -358,24 +322,14 @@ Visual #10
   Fields Details:
     - Display Name: Ordering Plant
       Query Name: ‎CCTR - LTP Data.Ordering Plant
-      Type: 1
-
-Visual #11
-  ID: 4102443147
-  Name: 03f990a909b4d9587e5b
-  Type: actionButton
-  Projections: None
-
-Visual #12
-  ID: 4102443148
-  Name: 35b638002379d1a466a8
-  Type: actionButton
-  Projections: None
+      Type: Text
 
 
 ================================================================================
 SUMMARY
 ================================================================================
 Total Sections: 1
-Total Visuals Analyzed: 12
+Total Visuals with Projections: 4
 ================================================================================
+
+CSV file created: visuals_data.csv
