@@ -3,6 +3,110 @@ import os
 import json
 from datetime import datetime
 
+def parse_visual_containers(layout_json, log_file):
+    """
+    Parse visual containers from layout JSON and extract columns and measures used in visuals.
+    
+    Args:
+        layout_json: Parsed JSON object containing layout information
+        log_file: File handle to write output
+    """
+    try:
+        sections = layout_json.get("sections", [])
+        
+        log_file.write(f"\n{'='*80}\n")
+        log_file.write(f"VISUAL ANALYSIS - COLUMNS AND MEASURES\n")
+        log_file.write(f"{'='*80}\n\n")
+        
+        total_visuals = 0
+        
+        for section_idx, section in enumerate(sections):
+            section_name = section.get("displayName", f"Section {section_idx + 1}")
+            visual_containers = section.get("visualContainers", [])
+            
+            log_file.write(f"\nSection: {section_name}\n")
+            log_file.write(f"{'-'*80}\n")
+            log_file.write(f"Total Visuals: {len(visual_containers)}\n\n")
+            
+            for visual_idx, visual in enumerate(visual_containers):
+                total_visuals += 1
+                visual_id = visual.get("id", "Unknown")
+                
+                # Parse the config JSON string
+                config_str = visual.get("config", "{}")
+                try:
+                    config = json.loads(config_str)
+                except json.JSONDecodeError:
+                    log_file.write(f"Visual #{visual_idx + 1} (ID: {visual_id}) - Unable to parse config\n\n")
+                    continue
+                
+                visual_name = config.get("name", "Unnamed")
+                single_visual = config.get("singleVisual", {})
+                visual_type = single_visual.get("visualType", "Unknown")
+                projections = single_visual.get("projections", {})
+                
+                log_file.write(f"Visual #{visual_idx + 1}\n")
+                log_file.write(f"  ID: {visual_id}\n")
+                log_file.write(f"  Name: {visual_name}\n")
+                log_file.write(f"  Type: {visual_type}\n")
+                
+                # Extract columns and measures from projections
+                if projections:
+                    log_file.write(f"  Projections:\n")
+                    
+                    for proj_type, proj_items in projections.items():
+                        if proj_items:
+                            log_file.write(f"    {proj_type}:\n")
+                            for item in proj_items:
+                                query_ref = item.get("queryRef", "N/A")
+                                active = item.get("active", True)
+                                log_file.write(f"      - {query_ref} (Active: {active})\n")
+                else:
+                    log_file.write(f"  Projections: None\n")
+                
+                # Parse dataTransforms if available for additional metadata
+                data_transforms_str = visual.get("dataTransforms", "{}")
+                try:
+                    data_transforms = json.loads(data_transforms_str)
+                    selects = data_transforms.get("selects", [])
+                    
+                    if selects:
+                        log_file.write(f"  Fields Details:\n")
+                        for select in selects:
+                            display_name = select.get("displayName", "N/A")
+                            query_name = select.get("queryName", "N/A")
+                            field_type = select.get("type", {})
+                            underlying_type = field_type.get("underlyingType", "N/A")
+                            format_info = select.get("format", "N/A")
+                            
+                            log_file.write(f"    - Display Name: {display_name}\n")
+                            log_file.write(f"      Query Name: {query_name}\n")
+                            log_file.write(f"      Type: {underlying_type}\n")
+                            if format_info != "N/A":
+                                log_file.write(f"      Format: {format_info}\n")
+                            
+                            # Check if it's a measure (aggregation)
+                            expr = select.get("expr", {})
+                            if "Aggregation" in expr:
+                                agg_func = expr["Aggregation"].get("Function", "Unknown")
+                                log_file.write(f"      Aggregation: Function {agg_func}\n")
+                            
+                except json.JSONDecodeError:
+                    pass
+                
+                log_file.write(f"\n")
+        
+        log_file.write(f"\n{'='*80}\n")
+        log_file.write(f"SUMMARY\n")
+        log_file.write(f"{'='*80}\n")
+        log_file.write(f"Total Sections: {len(sections)}\n")
+        log_file.write(f"Total Visuals Analyzed: {total_visuals}\n")
+        log_file.write(f"{'='*80}\n")
+        
+    except Exception as e:
+        log_file.write(f"\nError parsing visual containers: {str(e)}\n")
+
+
 def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
     """
     Reads a PBIX file as a ZIP archive and lists all files with their paths.
@@ -70,6 +174,7 @@ def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
                 log_file.write(f"{'='*80}\n\n")
                 
                 # Extract and write Layout file contents
+                layout_json = None
                 if layout_file_path:
                     log_file.write(f"\n{'='*80}\n")
                     log_file.write(f"LAYOUT FILE CONTENTS (Report/Layout)\n")
@@ -113,6 +218,10 @@ def extract_pbix_contents(pbix_file_path, output_log_path="output.log"):
                         log_file.write(f"Error reading Layout file: {str(e)}\n")
                 else:
                     log_file.write(f"\nNote: Layout file not found in PBIX archive.\n")
+                
+                # Parse visual containers if layout JSON was successfully loaded
+                if layout_json:
+                    parse_visual_containers(layout_json, log_file)
         
         print(f"Analysis complete! Output written to: {output_log_path}")
         
