@@ -1,7 +1,7 @@
 PBIX File Analysis Report
 ================================================================================
 File: ./data/Components requirements next 12 weeks by ORDERING plant.pbix
-Timestamp: 2025-10-03 14:20:37
+Timestamp: 2025-10-03 14:24:19
 ================================================================================
 
 Total files found: 8
@@ -254,20 +254,20 @@ Visual #2
   Projections:
     Rows:
       - CCTR - Facility.Plant ID (Active: True)
-      - ‎CCTR - LTP Data.Link (Active: True)
-      - ‎CCTR - LTP Data.Part ID (Active: True)
+      - CCTR - LTP Data.Link (Active: True)
+      - CCTR - LTP Data.Part ID (Active: True)
       - CCTR - Material.Material ID (Active: True)
       - CCTR - Material.Material DESC (Active: True)
-      - ‎CCTR - LTP Data.Inhouse Indicator (Active: True)
-      - ‎CCTR - LTP Data.Ordering Plant (Active: True)
-      - ‎CCTR - LTP Data.Base Unit (Active: True)
+      - CCTR - LTP Data.Inhouse Indicator (Active: True)
+      - CCTR - LTP Data.Ordering Plant (Active: True)
+      - CCTR - LTP Data.Base Unit (Active: True)
     Columns:
       - CCTR - Requirement Dates.Req Date (Active: True)
     Values:
-      - Sum(‎CCTR - LTP Data.Requirement Qty) (Active: True)
+      - Sum(CCTR - LTP Data.Requirement Qty) (Active: True)
   Fields Details:
     - Display Name: Part ID
-      Query Name: ‎CCTR - LTP Data.Part ID
+      Query Name: CCTR - LTP Data.Part ID
       Type: Text
     - Display Name: Material
       Query Name: CCTR - Material.Material ID
@@ -280,21 +280,21 @@ Visual #2
       Type: Date
       Format: yyyy-MM-dd
     - Display Name: Sum of Requirement Qty
-      Query Name: Sum(‎CCTR - LTP Data.Requirement Qty)
+      Query Name: Sum(CCTR - LTP Data.Requirement Qty)
       Type: Decimal Number
       Format: 0.0
       Aggregation: Function 0
     - Display Name: Link
-      Query Name: ‎CCTR - LTP Data.Link
+      Query Name: CCTR - LTP Data.Link
       Type: Text
     - Display Name: Inhouse Indicator
-      Query Name: ‎CCTR - LTP Data.Inhouse Indicator
+      Query Name: CCTR - LTP Data.Inhouse Indicator
       Type: Text
     - Display Name: Ordering Plant
-      Query Name: ‎CCTR - LTP Data.Ordering Plant
+      Query Name: CCTR - LTP Data.Ordering Plant
       Type: Text
     - Display Name: BUM
-      Query Name: ‎CCTR - LTP Data.Base Unit
+      Query Name: CCTR - LTP Data.Base Unit
       Type: Text
     - Display Name: Plant
       Query Name: CCTR - Facility.Plant ID
@@ -318,10 +318,10 @@ Visual #4
   Type: slicer
   Projections:
     Values:
-      - ‎CCTR - LTP Data.Ordering Plant (Active: True)
+      - CCTR - LTP Data.Ordering Plant (Active: True)
   Fields Details:
     - Display Name: Ordering Plant
-      Query Name: ‎CCTR - LTP Data.Ordering Plant
+      Query Name: CCTR - LTP Data.Ordering Plant
       Type: Text
 
 
