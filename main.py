@@ -65,19 +65,274 @@ def get_type_name(type_code):
     """
     return POWERBI_TYPE_CODES.get(type_code, f"Type Code {type_code}")
 
-def extract_visuals_data(pbix_file_path):
+def parse_filter_item(filter_item):
     """
-    Extract visual data from PBIX file and return as a list of dictionaries.
-    This function is designed for use with Streamlit.
+    Parse individual filter item to extract meaningful information.
+    
+    Args:
+        filter_item: Filter dictionary
+    
+    Returns:
+        Dictionary with filter details or None if no meaningful filter
+    """
+    try:
+        # Extract filter conditions - only process if Where clause exists
+        filter_data = filter_item.get("filter", {})
+        where_clause = filter_data.get("Where", [])
+        
+        # Skip filters without Where clause
+        if not where_clause:
+            return None
+        
+        # Extract basic filter info
+        filter_type = filter_item.get("type", "Unknown")
+        expression = filter_item.get("expression", {})
+        
+        # Extract table and column from expression
+        table_name = "Unknown"
+        column_name = "Unknown"
+        
+        if "Column" in expression:
+            column_info = expression["Column"]
+            
+            # Get table name from Entity
+            entity_expr = column_info.get("Expression", {})
+            if "SourceRef" in entity_expr:
+                source_ref = entity_expr["SourceRef"]
+                table_name = source_ref.get("Entity", "Unknown")
+            
+            # Get column name from Property
+            column_name = column_info.get("Property", "Unknown")
+        
+        # Helper function to clean Power BI literal values
+        def clean_literal_value(value_str):
+            """Remove Power BI type suffixes from literal values"""
+            if not isinstance(value_str, str):
+                return str(value_str)
+            
+            # Remove common Power BI type suffixes
+            # D = Decimal, L = Long, M = Money/Currency
+            if value_str.endswith('D') or value_str.endswith('L') or value_str.endswith('M'):
+                # Check if it's actually a number with suffix
+                base_value = value_str[:-1]
+                # Check if base is numeric (including decimals and negatives)
+                if base_value.replace('-', '').replace('.', '').replace(',', '').isdigit():
+                    return base_value
+            
+            return value_str
+        
+        # Extract filter conditions
+        conditions = []
+        operator = "Unknown"
+        
+        for condition in where_clause:
+            if "Condition" in condition:
+                cond = condition["Condition"]
+                
+                # Handle "In" operator
+                if "In" in cond:
+                    in_clause = cond["In"]
+                    values = in_clause.get("Values", [])
+                    
+                    if values:
+                        operator = "IN"
+                        # Extract literal values
+                        extracted_values = []
+                        for value_array in values:
+                            if isinstance(value_array, list):
+                                for val in value_array:
+                                    if isinstance(val, dict) and "Literal" in val:
+                                        literal_val = val["Literal"].get("Value", "")
+                                        cleaned_val = clean_literal_value(literal_val)
+                                        extracted_values.append(cleaned_val)
+                        
+                        if extracted_values:
+                            # Show all values without truncation
+                            conditions.append(f"IN ({', '.join(extracted_values)})")
+                        else:
+                            conditions.append(f"IN ({len(values)} values)")
+                
+                # Handle "Not" operator with "In"
+                elif "Not" in cond:
+                    not_clause = cond["Not"]
+                    if "Expression" in not_clause and "In" in not_clause["Expression"]:
+                        in_clause = not_clause["Expression"]["In"]
+                        values = in_clause.get("Values", [])
+                        operator = "NOT IN"
+                        
+                        if values:
+                            extracted_values = []
+                            for value_array in values:
+                                if isinstance(value_array, list):
+                                    for val in value_array:
+                                        if isinstance(val, dict) and "Literal" in val:
+                                            literal_val = val["Literal"].get("Value", "")
+                                            cleaned_val = clean_literal_value(literal_val)
+                                            extracted_values.append(cleaned_val)
+                            
+                            if extracted_values:
+                                # Show all values without truncation
+                                conditions.append(f"NOT IN ({', '.join(extracted_values)})")
+                            else:
+                                conditions.append(f"NOT IN ({len(values)} values)")
+                
+                # Handle comparison operators
+                elif "Comparison" in cond:
+                    comparison = cond["Comparison"]
+                    comparison_kind = comparison.get("ComparisonKind", 0)
+                    
+                    # Map comparison kind to operator
+                    comparison_map = {
+                        0: "=",
+                        1: "<>",
+                        2: ">",
+                        3: ">=",
+                        4: "<",
+                        5: "<="
+                    }
+                    operator = comparison_map.get(comparison_kind, "Unknown")
+                    
+                    # Try to get the comparison value
+                    right_expr = comparison.get("Right", {})
+                    if "Literal" in right_expr:
+                        value = right_expr["Literal"].get("Value", "")
+                        cleaned_value = clean_literal_value(value)
+                        conditions.append(f"{operator} {cleaned_value}")
+                    else:
+                        conditions.append(operator)
+                
+                # Handle "Between" operator
+                elif "Between" in cond:
+                    operator = "BETWEEN"
+                    between_clause = cond["Between"]
+                    lower = between_clause.get("Lower", {})
+                    upper = between_clause.get("Upper", {})
+                    
+                    lower_val = ""
+                    upper_val = ""
+                    
+                    if "Literal" in lower:
+                        lower_val = clean_literal_value(lower["Literal"].get("Value", ""))
+                    if "Literal" in upper:
+                        upper_val = clean_literal_value(upper["Literal"].get("Value", ""))
+                    
+                    if lower_val and upper_val:
+                        conditions.append(f"BETWEEN {lower_val} AND {upper_val}")
+                    else:
+                        conditions.append("BETWEEN (values)")
+                
+                # Handle "Contains" operator
+                elif "Contains" in cond:
+                    operator = "CONTAINS"
+                    contains_clause = cond["Contains"]
+                    right_expr = contains_clause.get("Right", {})
+                    
+                    if "Literal" in right_expr:
+                        value = right_expr["Literal"].get("Value", "")
+                        cleaned_value = clean_literal_value(value)
+                        conditions.append(f"CONTAINS '{cleaned_value}'")
+                    else:
+                        conditions.append("CONTAINS (text)")
+        
+        # Only return filter if we have meaningful conditions
+        if not conditions:
+            return None
+        
+        return {
+            "table": clean_text(table_name),
+            "column": clean_text(column_name),
+            "type": filter_type,
+            "operator": operator,
+            "conditions": conditions
+        }
+        
+    except Exception as e:
+        return None
+    
+
+def extract_filters(filters_json):
+    """
+    Extract and format filter information from filters JSON.
+    
+    Args:
+        filters_json: Filters JSON string or object
+    
+    Returns:
+        List of filter dictionaries with detailed information
+    """
+    filter_list = []
+    
+    try:
+        # Parse JSON if string
+        if isinstance(filters_json, str):
+            if not filters_json or filters_json.strip() == "":
+                return []
+            filters = json.loads(filters_json)
+        else:
+            filters = filters_json
+        
+        if not filters:
+            return []
+        
+        # Handle different filter structures
+        if isinstance(filters, list):
+            for filter_item in filters:
+                filter_info = parse_filter_item(filter_item)
+                if filter_info:
+                    filter_list.append(filter_info)
+        elif isinstance(filters, dict):
+            filter_info = parse_filter_item(filters)
+            if filter_info:
+                filter_list.append(filter_info)
+                
+    except (json.JSONDecodeError, Exception) as e:
+        pass
+    
+    return filter_list
+
+def format_filters_for_display(filters):
+    """
+    Format filter list for display in UI.
+    
+    Args:
+        filters: List of filter dictionaries
+    
+    Returns:
+        Formatted string for display
+    """
+    if not filters:
+        return ""
+    
+    formatted_filters = []
+    for f in filters:
+        table = f.get("table", "Unknown")
+        column = f.get("column", "Unknown")
+        conditions = f.get("conditions", [])
+        
+        if conditions:
+            condition_str = " ".join(conditions)
+            formatted_filters.append(f"{table}.{column}: {condition_str}")
+        else:
+            formatted_filters.append(f"{table}.{column}")
+    
+    return " | ".join(formatted_filters)
+
+def extract_report_metadata(pbix_file_path):
+    """
+    Extract comprehensive report metadata including pages, visuals, and filters.
     
     Args:
         pbix_file_path: Path to the PBIX file or file-like object
     
     Returns:
-        List of dictionaries containing visual data
+        Dictionary containing report metadata
     """
     try:
-        csv_data = []
+        report_data = {
+            "summary": {},
+            "pages": [],
+            "visuals": []
+        }
         
         # Open PBIX file as ZIP
         with zipfile.ZipFile(pbix_file_path, 'r') as zip_ref:
@@ -89,7 +344,7 @@ def extract_visuals_data(pbix_file_path):
                     break
             
             if not layout_file_path:
-                return []
+                return report_data
             
             # Read and parse Layout file
             with zip_ref.open(layout_file_path) as layout_file:
@@ -113,12 +368,23 @@ def extract_visuals_data(pbix_file_path):
                 layout_json = json.loads(layout_content)
                 sections = layout_json.get("sections", [])
                 
-                # Process each section
+                total_visuals = 0
+                
+                # Process each page/section
                 for section_idx, section in enumerate(sections):
                     page_name = clean_text(section.get("displayName", f"Page {section_idx + 1}"))
                     visual_containers = section.get("visualContainers", [])
                     
-                    for visual in visual_containers:
+                    # Extract page-level filters (parse JSON string)
+                    page_filters_str = section.get("filters", "[]")
+                    page_filters = extract_filters(page_filters_str)
+                    page_filters_display = format_filters_for_display(page_filters)
+                    
+                    page_visuals_count = 0
+                    page_visuals_with_data = 0
+                    
+                    # Process each visual
+                    for visual_idx, visual in enumerate(visual_containers):
                         config_str = visual.get("config", "{}")
                         try:
                             config = json.loads(config_str)
@@ -127,10 +393,34 @@ def extract_visuals_data(pbix_file_path):
                             
                             # Check if projections exist and are not empty
                             has_projections = projections and any(projections.values())
+                            
                             if not has_projections:
                                 continue
                             
+                            page_visuals_with_data += 1
+                            total_visuals += 1
+                            
+                            visual_id = str(visual.get("id", f"visual_{visual_idx}"))
                             visual_type = clean_text(single_visual.get("visualType", "Unknown"))
+                            
+                            # Extract visual title from vcObjects
+                            visual_title = "[No Title]"
+                            vc_objects = single_visual.get("vcObjects", {})
+                            if vc_objects and "title" in vc_objects:
+                                title_settings = vc_objects["title"]
+                                if isinstance(title_settings, list) and len(title_settings) > 0:
+                                    for title_obj in title_settings:
+                                        properties = title_obj.get("properties", {})
+                                        if "text" in properties:
+                                            text_expr = properties["text"].get("expr", {})
+                                            if "Literal" in text_expr:
+                                                visual_title = clean_text(text_expr["Literal"].get("Value", "[No Title]").strip("'"))
+                                                break
+                            
+                            # Extract visual-level filters (parse JSON string)
+                            visual_filters_str = visual.get("filters", "[]")
+                            visual_filters = extract_filters(visual_filters_str)
+                            visual_filters_display = format_filters_for_display(visual_filters)
                             
                             # Collect projection data
                             projection_details = []
@@ -186,7 +476,7 @@ def extract_visuals_data(pbix_file_path):
                             except json.JSONDecodeError:
                                 pass
                             
-                            # Create CSV rows
+                            # Create visual records
                             if field_details:
                                 for field in field_details:
                                     # Find matching projection
@@ -196,9 +486,12 @@ def extract_visuals_data(pbix_file_path):
                                             matching_projection = proj
                                             break
                                     
-                                    csv_row = {
+                                    visual_row = {
                                         "Page Name": page_name,
+                                        "Visual ID": visual_id,
+                                        "Visual Title": visual_title,
                                         "Visual Type": visual_type,
+                                        "Visual Filters": visual_filters_display,
                                         "Field Display Name": field["display_name"],
                                         "Field Query Name": field["query_name"],
                                         "Field Type": field["type"],
@@ -208,13 +501,16 @@ def extract_visuals_data(pbix_file_path):
                                         "Projection Type": matching_projection["projection_type"] if matching_projection else "",
                                         "Active": str(matching_projection["active"]) if matching_projection else ""
                                     }
-                                    csv_data.append(csv_row)
+                                    report_data["visuals"].append(visual_row)
                             else:
                                 # If no field details, add basic visual info
                                 for proj in projection_details:
-                                    csv_row = {
+                                    visual_row = {
                                         "Page Name": page_name,
+                                        "Visual ID": visual_id,
+                                        "Visual Title": visual_title,
                                         "Visual Type": visual_type,
+                                        "Visual Filters": visual_filters_display,
                                         "Field Display Name": "",
                                         "Field Query Name": proj["query_ref"],
                                         "Field Type": "",
@@ -224,15 +520,46 @@ def extract_visuals_data(pbix_file_path):
                                         "Projection Type": proj["projection_type"],
                                         "Active": str(proj["active"])
                                     }
-                                    csv_data.append(csv_row)
+                                    report_data["visuals"].append(visual_row)
                                     
                         except json.JSONDecodeError:
                             continue
+                    
+                    # Add page summary
+                    page_data = {
+                        "Page Name": page_name,
+                        "Visual Count": page_visuals_with_data,
+                        "Page Filters": page_filters_display if page_filters_display else "None"
+                    }
+                    report_data["pages"].append(page_data)
+                
+                # Add report summary
+                report_data["summary"] = {
+                    "Total Pages": len(sections),
+                    "Total Visuals": total_visuals
+                }
         
-        return csv_data
+        return report_data
         
     except Exception as e:
-        raise Exception(f"Error extracting visuals data: {str(e)}")
+        raise Exception(f"Error extracting report metadata: {str(e)}")
+    
+def extract_visuals_data(pbix_file_path):
+    """
+    Extract visual data from PBIX file and return as a list of dictionaries.
+    This function is designed for use with Streamlit.
+    
+    Args:
+        pbix_file_path: Path to the PBIX file or file-like object
+    
+    Returns:
+        Dictionary containing report metadata
+    """
+    metadata = extract_report_metadata(pbix_file_path)
+    return metadata
+
+# ... (keep all existing functions for backward compatibility)
+# ... (parse_visual_containers and extract_pbix_contents remain the same)
 
 def parse_visual_containers(layout_json, log_file, csv_file_path):
     """

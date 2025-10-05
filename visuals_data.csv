@@ -1,14 +1,14 @@
-Section Name,Visual ID,Visual Name,Visual Type,Field Display Name,Field Query Name,Field Type,Field Format,Is Measure,Aggregation,Projection Type,Active
-Page 1,4102443143,cfb1ad64c02ab8363085,card,First DATA_REFRESHED_DATE,Min(Data Refreshed Date.DATA_REFRESHED_DATE),Text,,Yes,Function 3,Values,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Part ID,CCTR - LTP Data.Part ID,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Material,CCTR - Material.Material ID,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Description,CCTR - Material.Material DESC,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Req Date,CCTR - Requirement Dates.Req Date,Date,yyyy-MM-dd,No,,Columns,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Sum of Requirement Qty,Sum(CCTR - LTP Data.Requirement Qty),Decimal Number,0.0,Yes,Function 0,Values,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Link,CCTR - LTP Data.Link,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Inhouse Indicator,CCTR - LTP Data.Inhouse Indicator,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Ordering Plant,CCTR - LTP Data.Ordering Plant,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,BUM,CCTR - LTP Data.Base Unit,Text,,No,,Rows,True
-Page 1,4102443144,bc279458b8867e9c7300,pivotTable,Plant,CCTR - Facility.Plant ID,Text,,No,,Rows,True
-Page 1,4102443145,c56db9153989b3b56601,slicer,Select Plant,CCTR - Facility.Plant DESC,Text,,No,,Values,True
-Page 1,4102443146,c07ff3d9511cdcffc302,slicer,Ordering Plant,CCTR - LTP Data.Ordering Plant,Text,,No,,Values,True
+Page Name,Visual Type,Field Display Name,Field Query Name,Field Type,Field Format,Is Measure,Aggregation,Projection Type,Active
+Page 1,card,First DATA_REFRESHED_DATE,Min(Data Refreshed Date.DATA_REFRESHED_DATE),Text,,Yes,Function 3,Values,True
+Page 1,pivotTable,Part ID,CCTR - LTP Data.Part ID,Text,,No,,Rows,True
+Page 1,pivotTable,Material,CCTR - Material.Material ID,Text,,No,,Rows,True
+Page 1,pivotTable,Description,CCTR - Material.Material DESC,Text,,No,,Rows,True
+Page 1,pivotTable,Req Date,CCTR - Requirement Dates.Req Date,Date,yyyy-MM-dd,No,,Columns,True
+Page 1,pivotTable,Sum of Requirement Qty,Sum(CCTR - LTP Data.Requirement Qty),Decimal Number,0.0,Yes,Function 0,Values,True
+Page 1,pivotTable,Link,CCTR - LTP Data.Link,Text,,No,,Rows,True
+Page 1,pivotTable,Inhouse Indicator,CCTR - LTP Data.Inhouse Indicator,Text,,No,,Rows,True
+Page 1,pivotTable,Ordering Plant,CCTR - LTP Data.Ordering Plant,Text,,No,,Rows,True
+Page 1,pivotTable,BUM,CCTR - LTP Data.Base Unit,Text,,No,,Rows,True
+Page 1,pivotTable,Plant,CCTR - Facility.Plant ID,Text,,No,,Rows,True
+Page 1,slicer,Facility ID,CCTR - BOM Data.Facility ID,Text,,No,,Values,True
+Page 1,slicer,Ordering Plant,CCTR - LTP Data.Ordering Plant,Text,,No,,Values,True
