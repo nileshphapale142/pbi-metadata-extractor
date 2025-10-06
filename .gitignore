@@ -1,4 +1,4 @@
-data
+data/*
 .venv
-ouput.log
+output.log
 __pycache__/
