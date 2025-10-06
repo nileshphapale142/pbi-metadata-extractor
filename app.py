@@ -65,6 +65,75 @@ def process_single_pbix(uploaded_file, file_name="Report"):
         st.error(f"❌ Error processing {file_name}: {str(e)}")
         return None
 
+
+def calculate_report_metrics(report_data):
+    """Calculate advanced metrics for a report including complexity score"""
+    summary = report_data.get("summary", {})
+    visuals = report_data.get("visuals", [])
+    pages = report_data.get("pages", [])
+    
+    df_visuals = pd.DataFrame(visuals)
+    
+    # Count measures
+    measures_count = len(df_visuals[df_visuals['Is Measure'] == 'Yes']) if not df_visuals.empty else 0
+    
+    # Count unique tables (from Field Query Name which has format Table[Column])
+    unique_tables = set()
+    if not df_visuals.empty:
+        for query_name in df_visuals['Field Query Name'].dropna():
+            if '[' in query_name:
+                table = query_name.split('[')[0].strip()
+                if table:
+                    unique_tables.add(table)
+    tables_count = len(unique_tables)
+    
+    # Count filters
+    total_filters = 0
+    for page in pages:
+        page_filters = page.get('Page Filters', '')
+        if page_filters and page_filters != "None":
+            total_filters += len(page_filters.split(' | '))
+    
+    unique_visual_filters = df_visuals[['Visual ID', 'Visual Filters']].drop_duplicates() if not df_visuals.empty else pd.DataFrame()
+    for _, visual in unique_visual_filters.iterrows():
+        visual_filters = visual.get('Visual Filters', '')
+        if visual_filters:
+            total_filters += len(visual_filters.split(' | '))
+    
+    # Calculate Complexity Score
+    # Formula: (Pages * 10) + (Visuals * 5) + (Fields * 2) + (Measures * 3) + (Tables * 8) + (Filters * 4)
+    # Weighted to reflect complexity impact
+    total_pages = summary.get("Total Pages", 0)
+    total_visuals = summary.get("Total Visuals", 0)
+    total_fields = len(visuals)
+    
+    complexity_score = (
+        (total_pages * 10) +
+        (total_visuals * 5) +
+        (total_fields * 2) +
+        (measures_count * 3) +
+        (tables_count * 8) +
+        (total_filters * 4)
+    )
+    
+    # Determine complexity level
+    if complexity_score < 100:
+        complexity_level = "Low"
+    elif complexity_score < 500:
+        complexity_level = "Medium"
+    elif complexity_score < 1000:
+        complexity_level = "High"
+    else:
+        complexity_level = "Very High"
+    
+    return {
+        "measures_count": measures_count,
+        "tables_count": tables_count,
+        "total_filters": total_filters,
+        "complexity_score": complexity_score,
+        "complexity_level": complexity_level
+    }
+
 def display_report_data(report_data, report_name="Report"):
     """Display report data in tabs"""
     
@@ -82,7 +151,10 @@ def display_report_data(report_data, report_name="Report"):
     
     # ========== REPORT SUMMARY ==========
     st.header(f"📈 Report Summary - {report_name}")
-    col1, col2, col3 = st.columns(3)
+    # Calculate advanced metrics
+    metrics = calculate_report_metrics(report_data)
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.metric(
@@ -99,6 +171,43 @@ def display_report_data(report_data, report_name="Report"):
             label="🔢 Total Fields",
             value=len(df_visuals)
         )
+    with col4:
+        st.metric(
+            label="📐 Measures",
+            value=metrics["measures_count"]
+        )
+    with col5:
+        st.metric(
+            label="🗄️ Tables",
+            value=metrics["tables_count"]
+        )
+    
+    # Second row of metrics
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            label="🔍 Total Filters",
+            value=metrics["total_filters"]
+        )
+    with col2:
+        st.metric(
+            label="⚡ Complexity Score",
+            value=metrics["complexity_score"]
+        )
+    with col3:
+        # Color-coded complexity level
+        complexity_colors = {
+            "Low": "🟢",
+            "Medium": "🟡",
+            "High": "🟠",
+            "Very High": "🔴"
+        }
+        st.metric(
+            label="📊 Complexity Level",
+            value=f"{complexity_colors.get(metrics['complexity_level'], '')} {metrics['complexity_level']}"
+        )
+
     
     st.divider()
     
@@ -520,31 +629,38 @@ elif processing_mode == "📚 Multiple Files Comparison":
             for report_name, report_data in all_reports_data.items():
                 summary = report_data.get("summary", {})
                 visuals = report_data.get("visuals", [])
-                pages = report_data.get("pages", [])
                 
-                # Count filters
-                total_filters = 0
-                for page in pages:
-                    page_filters = page.get('Page Filters', '')
-                    if page_filters and page_filters != "None":
-                        total_filters += len(page_filters.split(' | '))
-                
-                for visual in visuals:
-                    visual_filters = visual.get('Visual Filters', '')
-                    if visual_filters:
-                        total_filters += len(visual_filters.split(' | '))
+                # Calculate metrics using helper function
+                metrics = calculate_report_metrics(report_data)
                 
                 comparison_data.append({
                     "Report Name": report_name,
                     "Total Pages": summary.get("Total Pages", 0),
                     "Total Visuals": summary.get("Total Visuals", 0),
                     "Total Fields": len(visuals),
-                    "Total Filters": total_filters
+                    "Measures": metrics["measures_count"],
+                    "Tables": metrics["tables_count"],
+                    "Total Filters": metrics["total_filters"],
+                    "Complexity Score": metrics["complexity_score"],
+                    "Complexity": metrics["complexity_level"]
                 })
             
             df_comparison = pd.DataFrame(comparison_data)
+            
+            # Color code complexity level
+            def highlight_complexity(row):
+                colors = {
+                    "Low": "background-color: #90EE90",
+                    "Medium": "background-color: #FFFFE0",
+                    "High": "background-color: #FFB347",
+                    "Very High": "background-color: #FF6B6B"
+                }
+                complexity = row['Complexity']
+                color = colors.get(complexity, "")
+                return [color if col == 'Complexity' else '' for col in row.index]
+            
             st.dataframe(
-                df_comparison, 
+                df_comparison.style.apply(highlight_complexity, axis=1), 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
@@ -552,7 +668,11 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Total Pages": st.column_config.NumberColumn("Pages", width="small"),
                     "Total Visuals": st.column_config.NumberColumn("Visuals", width="small"),
                     "Total Fields": st.column_config.NumberColumn("Fields", width="small"),
+                    "Measures": st.column_config.NumberColumn("Measures", width="small"),
+                    "Tables": st.column_config.NumberColumn("Tables", width="small"),
                     "Total Filters": st.column_config.NumberColumn("Filters", width="small"),
+                    "Complexity Score": st.column_config.NumberColumn("Complexity Score", width="small"),
+                    "Complexity": st.column_config.TextColumn("Complexity Level", width="small"),
                 }
             )
             
