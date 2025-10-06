@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 from main import extract_visuals_data
 import io
-import os
-from pathlib import Path
 
 # Page configuration
 st.set_page_config(
@@ -41,9 +39,8 @@ st.sidebar.markdown("---")
 processing_mode = st.sidebar.radio(
     "Select how you want to process PBIX files:",
     options=[
-        "📄 Single File",
-        "📚 Multiple Files",
-        "📁 Directory (Batch)"
+        "📄 Single File Analysis",
+        "📚 Multiple Files Comparison"
     ],
     index=0
 )
@@ -51,9 +48,8 @@ processing_mode = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 ### Processing Modes:
-- **Single File**: Upload and analyze one PBIX file
-- **Multiple Files**: Upload and compare multiple PBIX files
-- **Directory**: Process all PBIX files in a folder
+- **Single File**: Upload and analyze one PBIX file in detail
+- **Multiple Files**: Upload and compare multiple PBIX files side-by-side
 """)
 
 # Title and description
@@ -443,12 +439,13 @@ def display_report_data(report_data, report_name="Report"):
 
 # ========== MAIN APPLICATION LOGIC ==========
 
-if processing_mode == "📄 Single File":
+if processing_mode == "📄 Single File Analysis":
     st.markdown("""
-    Upload a single Power BI (.pbix) file to extract:
+    Upload a single Power BI (.pbix) file to extract comprehensive metadata including:
     - **Report Summary**: Pages and visuals count
     - **Page Details**: Visual count and filters per page  
-    - **Visual Details**: Fields, measures, data types, and filters
+    - **Visual Details**: Fields, measures, data types, titles, and filters
+    - **Filter Analysis**: Dedicated view of all page and visual-level filters
     """)
     
     uploaded_file = st.file_uploader("Upload a Power BI (.pbix) file", type=['pbix'])
@@ -457,16 +454,43 @@ if processing_mode == "📄 Single File":
         report_data = process_single_pbix(uploaded_file, uploaded_file.name)
         if report_data:
             display_report_data(report_data, uploaded_file.name.replace('.pbix', ''))
+    else:
+        with st.expander("ℹ️ How to use Single File Analysis"):
+            st.markdown("""
+            ### Steps:
+            1. Click on **"Browse files"** above
+            2. Select a Power BI (.pbix) file from your computer
+            3. Wait for processing to complete
+            4. Explore the results in four tabs:
+               - **Page Overview**: Summary of pages and their visuals
+               - **Visual Details**: Detailed field-level information
+               - **Filters**: All filters in a dedicated view
+               - **Export Data**: Download results as CSV or Excel
+            
+            ### What's Extracted:
+            - Visual titles and types
+            - Fields and measures with data types
+            - Page-level and visual-level filters
+            - Aggregations and projections
+            - Format information
+            """)
 
-elif processing_mode == "📚 Multiple Files":
+elif processing_mode == "📚 Multiple Files Comparison":
     st.markdown("""
     Upload multiple Power BI (.pbix) files to compare and analyze them side-by-side.
+    
+    **Perfect for:**
+    - Comparing development vs production reports
+    - Analyzing report variations across different teams
+    - Batch processing multiple reports
+    - Cross-report analysis
     """)
     
     uploaded_files = st.file_uploader(
         "Upload Power BI (.pbix) files", 
         type=['pbix'], 
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        help="You can select multiple files at once by holding Ctrl (Windows) or Cmd (Mac)"
     )
     
     if uploaded_files:
@@ -474,11 +498,19 @@ elif processing_mode == "📚 Multiple Files":
         
         # Process all files
         all_reports_data = {}
-        for uploaded_file in uploaded_files:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, uploaded_file in enumerate(uploaded_files):
             report_name = uploaded_file.name.replace('.pbix', '')
+            status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name}")
             report_data = process_single_pbix(uploaded_file, uploaded_file.name)
             if report_data:
                 all_reports_data[report_name] = report_data
+            progress_bar.progress((idx + 1) / len(uploaded_files))
+        
+        progress_bar.empty()
+        status_text.empty()
         
         if all_reports_data:
             # Comparison Summary
@@ -488,15 +520,51 @@ elif processing_mode == "📚 Multiple Files":
             for report_name, report_data in all_reports_data.items():
                 summary = report_data.get("summary", {})
                 visuals = report_data.get("visuals", [])
+                pages = report_data.get("pages", [])
+                
+                # Count filters
+                total_filters = 0
+                for page in pages:
+                    page_filters = page.get('Page Filters', '')
+                    if page_filters and page_filters != "None":
+                        total_filters += len(page_filters.split(' | '))
+                
+                for visual in visuals:
+                    visual_filters = visual.get('Visual Filters', '')
+                    if visual_filters:
+                        total_filters += len(visual_filters.split(' | '))
+                
                 comparison_data.append({
                     "Report Name": report_name,
                     "Total Pages": summary.get("Total Pages", 0),
                     "Total Visuals": summary.get("Total Visuals", 0),
-                    "Total Fields": len(visuals)
+                    "Total Fields": len(visuals),
+                    "Total Filters": total_filters
                 })
             
             df_comparison = pd.DataFrame(comparison_data)
-            st.dataframe(df_comparison, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_comparison, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Report Name": st.column_config.TextColumn("Report Name", width="large"),
+                    "Total Pages": st.column_config.NumberColumn("Pages", width="small"),
+                    "Total Visuals": st.column_config.NumberColumn("Visuals", width="small"),
+                    "Total Fields": st.column_config.NumberColumn("Fields", width="small"),
+                    "Total Filters": st.column_config.NumberColumn("Filters", width="small"),
+                }
+            )
+            
+            # Export comparison summary
+            st.divider()
+            csv_comparison = df_comparison.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Comparison Summary (CSV)",
+                data=csv_comparison,
+                file_name="pbix_comparison_summary.csv",
+                mime="text/csv",
+            )
             
             st.divider()
             
@@ -504,128 +572,40 @@ elif processing_mode == "📚 Multiple Files":
             st.subheader("📑 Select Report to View Details")
             selected_report = st.selectbox(
                 "Choose a report:",
-                options=list(all_reports_data.keys())
+                options=list(all_reports_data.keys()),
+                format_func=lambda x: f"{x} ({df_comparison[df_comparison['Report Name']==x]['Total Visuals'].values[0]} visuals)"
             )
             
             if selected_report:
                 st.divider()
                 display_report_data(all_reports_data[selected_report], selected_report)
-
-elif processing_mode == "📁 Directory (Batch)":
-    st.markdown("""
-    Process all Power BI (.pbix) files from a directory.
-    
-    **Note**: Enter the full path to a directory containing PBIX files.
-    """)
-    
-    directory_path = st.text_input(
-        "Enter directory path:",
-        placeholder="C:/Users/YourName/Documents/PowerBI Reports"
-    )
-    
-    if directory_path and st.button("🔍 Process Directory"):
-        if os.path.isdir(directory_path):
-            pbix_files = list(Path(directory_path).glob("*.pbix"))
+    else:
+        with st.expander("ℹ️ How to use Multiple Files Comparison"):
+            st.markdown("""
+            ### Steps:
+            1. Click on **"Browse files"** above
+            2. Select multiple .pbix files (hold Ctrl/Cmd to select multiple)
+            3. Wait for all files to be processed
+            4. View the comparison summary table
+            5. Select individual reports for detailed analysis
             
-            if pbix_files:
-                st.success(f"✅ Found {len(pbix_files)} PBIX file(s) in the directory!")
-                
-                # Process all files
-                all_reports_data = {}
-                progress_bar = st.progress(0)
-                
-                for idx, pbix_file in enumerate(pbix_files):
-                    report_name = pbix_file.stem
-                    with open(pbix_file, 'rb') as f:
-                        report_data = process_single_pbix(f, pbix_file.name)
-                        if report_data:
-                            all_reports_data[report_name] = report_data
-                    
-                    progress_bar.progress((idx + 1) / len(pbix_files))
-                
-                progress_bar.empty()
-                
-                if all_reports_data:
-                    # Comparison Summary
-                    st.header("📊 Batch Processing Summary")
-                    
-                    comparison_data = []
-                    for report_name, report_data in all_reports_data.items():
-                        summary = report_data.get("summary", {})
-                        visuals = report_data.get("visuals", [])
-                        comparison_data.append({
-                            "Report Name": report_name,
-                            "Total Pages": summary.get("Total Pages", 0),
-                            "Total Visuals": summary.get("Total Visuals", 0),
-                            "Total Fields": len(visuals)
-                        })
-                    
-                    df_comparison = pd.DataFrame(comparison_data)
-                    st.dataframe(df_comparison, use_container_width=True, hide_index=True)
-                    
-                    # Export batch summary
-                    st.divider()
-                    st.subheader("📥 Export Batch Summary")
-                    csv_batch = df_comparison.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Download Batch Summary (CSV)",
-                        data=csv_batch,
-                        file_name="batch_processing_summary.csv",
-                        mime="text/csv",
-                    )
-                    
-                    st.divider()
-                    
-                    # Report Selection
-                    st.subheader("📑 Select Report to View Details")
-                    selected_report = st.selectbox(
-                        "Choose a report:",
-                        options=list(all_reports_data.keys()),
-                        key="batch_report_select"
-                    )
-                    
-                    if selected_report:
-                        st.divider()
-                        display_report_data(all_reports_data[selected_report], selected_report)
-            else:
-                st.warning("⚠️ No PBIX files found in the specified directory.")
-        else:
-            st.error("❌ Invalid directory path. Please enter a valid path.")
-
-# Show instructions when no file is uploaded
-if not uploaded_file if processing_mode == "📄 Single File" else (not uploaded_files if processing_mode == "📚 Multiple Files" else not directory_path):
-    with st.expander("ℹ️ How to use this application"):
-        st.markdown("""
-        ### Getting Started
-        
-        **Choose a processing mode from the sidebar:**
-        
-        1. **📄 Single File**: Upload and analyze one PBIX file at a time
-        2. **📚 Multiple Files**: Upload multiple files to compare and analyze
-        3. **📁 Directory (Batch)**: Process all PBIX files in a folder automatically
-        
-        ### Features
-        - 📄 **Page Overview**: See all pages with visual counts and page-level filters
-        - 📊 **Visual Details**: Detailed information about each visual with title support
-        - 🔍 **Filters Tab**: Dedicated view showing all filters (page & visual level) - one per row
-        - 📥 **Export**: Download data in CSV or Excel format
-        - 🔄 **Comparison**: Compare multiple reports side-by-side
-        
-        ### What's Extracted
-        - Report summary (total pages and visuals)
-        - Visual titles (with "[No Title]" indicator when absent)
-        - Page-level and visual-level filters (parsed and displayed clearly)
-        - Fields and measures used in each visual
-        - Data types, formats, and aggregations
-        - Projection types (Rows, Columns, Values, etc.)
-        
-        **Note:** Only visuals with data projections are included. Decorative elements are excluded.
-        """)
+            ### Comparison Features:
+            - Side-by-side metrics for all uploaded reports
+            - Quick overview of pages, visuals, fields, and filters
+            - Export comparison summary
+            - Drill down into any report for full details
+            
+            ### Use Cases:
+            - Compare Dev vs Prod environments
+            - Analyze report evolution over time
+            - Cross-team report comparison
+            - Quality assurance across multiple reports
+            """)
 
 # Footer
 st.divider()
 st.markdown("""
 <div style='text-align: center; color: gray; padding: 20px;'>
-    <small>Power BI Metadata Extractor | Built with Streamlit & ❤️ by Nilesh Phapale</small>
+    <small>Power BI Metadata Extractor v2.0 | Built with Streamlit & ❤️</small>
 </div>
 """, unsafe_allow_html=True)
