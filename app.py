@@ -77,14 +77,42 @@ def calculate_report_metrics(report_data):
     # Count measures
     measures_count = len(df_visuals[df_visuals['Is Measure'] == 'Yes']) if not df_visuals.empty else 0
     
-    # Count unique tables (from Field Query Name which has format Table[Column])
+    # Count unique tables (from Field Query Name which has format like "Sum(TableName[Column])" or "TableName.Column")
     unique_tables = set()
     if not df_visuals.empty:
         for query_name in df_visuals['Field Query Name'].dropna():
+            query_name = str(query_name).strip()
+            
+            # Handle format: TableName[Column] or Sum(TableName[Column])
             if '[' in query_name:
-                table = query_name.split('[')[0].strip()
-                if table:
-                    unique_tables.add(table)
+                # Extract table name before the bracket
+                # Remove any aggregation functions first
+                clean_name = query_name
+                if '(' in clean_name:
+                    # Extract content between ( and )
+                    start = clean_name.find('(')
+                    end = clean_name.rfind(')')
+                    if start != -1 and end != -1:
+                        clean_name = clean_name[start+1:end]
+                
+                # Now extract table name before [
+                if '[' in clean_name:
+                    table = clean_name.split('[')[0].strip()
+                    if table and not table.startswith('_'):  # Exclude system tables
+                        unique_tables.add(table)
+            
+            # Handle format: TableName.Column
+            elif '.' in query_name and not query_name.startswith('.'):
+                # Split by the last dot to separate table from column
+                parts = query_name.rsplit('.', 1)
+                if len(parts) == 2:
+                    table = parts[0].strip()
+                    # Remove any aggregation function prefix
+                    if '(' in table:
+                        table = table.split('(')[-1]
+                    if table and not table.startswith('_'):
+                        unique_tables.add(table)
+    
     tables_count = len(unique_tables)
     
     # Count filters
@@ -131,7 +159,8 @@ def calculate_report_metrics(report_data):
         "tables_count": tables_count,
         "total_filters": total_filters,
         "complexity_score": complexity_score,
-        "complexity_level": complexity_level
+        "complexity_level": complexity_level,
+        "unique_tables": list(unique_tables)  # For debugging
     }
 
 def display_report_data(report_data, report_name="Report"):
@@ -633,6 +662,14 @@ elif processing_mode == "📚 Multiple Files Comparison":
                 # Calculate metrics using helper function
                 metrics = calculate_report_metrics(report_data)
                 
+                # Add emoji to complexity level
+                complexity_emojis = {
+                    "Low": "🟢 Low",
+                    "Medium": "🟡 Medium",
+                    "High": "🟠 High",
+                    "Very High": "🔴 Very High"
+                }
+                
                 comparison_data.append({
                     "Report Name": report_name,
                     "Total Pages": summary.get("Total Pages", 0),
@@ -642,25 +679,14 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Tables": metrics["tables_count"],
                     "Total Filters": metrics["total_filters"],
                     "Complexity Score": metrics["complexity_score"],
-                    "Complexity": metrics["complexity_level"]
+                    "Complexity": complexity_emojis.get(metrics["complexity_level"], metrics["complexity_level"])
                 })
             
+# Replace the comparison summary display section (around line 543-578)
             df_comparison = pd.DataFrame(comparison_data)
             
-            # Color code complexity level
-            def highlight_complexity(row):
-                colors = {
-                    "Low": "background-color: #90EE90",
-                    "Medium": "background-color: #FFFFE0",
-                    "High": "background-color: #FFB347",
-                    "Very High": "background-color: #FF6B6B"
-                }
-                complexity = row['Complexity']
-                color = colors.get(complexity, "")
-                return [color if col == 'Complexity' else '' for col in row.index]
-            
             st.dataframe(
-                df_comparison.style.apply(highlight_complexity, axis=1), 
+                df_comparison, 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
@@ -675,6 +701,18 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Complexity": st.column_config.TextColumn("Complexity Level", width="small"),
                 }
             )
+            
+            # Add visual complexity indicators
+            st.markdown("**Complexity Level Legend:**")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.markdown("🟢 **Low** (< 100)")
+            with col2:
+                st.markdown("🟡 **Medium** (100-499)")
+            with col3:
+                st.markdown("🟠 **High** (500-999)")
+            with col4:
+                st.markdown("🔴 **Very High** (≥ 1000)")
             
             # Export comparison summary
             st.divider()
@@ -726,6 +764,6 @@ elif processing_mode == "📚 Multiple Files Comparison":
 st.divider()
 st.markdown("""
 <div style='text-align: center; color: gray; padding: 20px;'>
-    <small>Power BI Metadata Extractor v2.0 | Built with Streamlit & ❤️</small>
+    <small>Power BI Metadata Extractor | Built with Streamlit & ❤️ by Nilesh</small>
 </div>
 """, unsafe_allow_html=True)
