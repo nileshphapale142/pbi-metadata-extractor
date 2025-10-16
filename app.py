@@ -178,68 +178,6 @@ def display_report_data(report_data, report_name="Report"):
     df_pages = pd.DataFrame(pages)
     df_visuals = pd.DataFrame(visuals)
     
-    # ========== REPORT SUMMARY ==========
-    st.header(f"📈 Report Summary - {report_name}")
-    # Calculate advanced metrics
-    metrics = calculate_report_metrics(report_data)
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric(
-            label="📄 Total Pages",
-            value=summary.get("Total Pages", 0)
-        )
-    with col2:
-        st.metric(
-            label="📊 Total Visuals",
-            value=summary.get("Total Visuals", 0)
-        )
-    with col3:
-        st.metric(
-            label="🔢 Total Fields",
-            value=len(df_visuals)
-        )
-    with col4:
-        st.metric(
-            label="📐 Measures",
-            value=metrics["measures_count"]
-        )
-    with col5:
-        st.metric(
-            label="🗄️ Tables",
-            value=metrics["tables_count"]
-        )
-    
-    # Second row of metrics
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric(
-            label="🔍 Total Filters",
-            value=metrics["total_filters"]
-        )
-    with col2:
-        st.metric(
-            label="⚡ Complexity Score",
-            value=metrics["complexity_score"]
-        )
-    with col3:
-        # Color-coded complexity level
-        complexity_colors = {
-            "Low": "🟢",
-            "Medium": "🟡",
-            "High": "🟠",
-            "Very High": "🔴"
-        }
-        st.metric(
-            label="📊 Complexity Level",
-            value=f"{complexity_colors.get(metrics['complexity_level'], '')} {metrics['complexity_level']}"
-        )
-
-    
-    st.divider()
-    
     # ========== TABS FOR DIFFERENT VIEWS ==========
     tab1, tab2, tab3, tab4 = st.tabs(["📄 Page Overview", "📊 Visual Details", "🔍 Filters", "📥 Export Data"])
     
