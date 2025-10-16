@@ -1,7 +1,11 @@
-data/*
-.venv
+# Python virtual environment
+.venv/
+
+# Log files
 output.log
+
+# Python cache
 __pycache__/
-/dump/*
-dump/*
-dump
+
+# Dump output
+dump/
