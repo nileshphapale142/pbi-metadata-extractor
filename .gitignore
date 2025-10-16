@@ -2,3 +2,6 @@ data/*
 .venv
 output.log
 __pycache__/
+/dump/*
+dump/*
+dump

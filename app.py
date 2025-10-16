@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from main import extract_visuals_data
+from src.report import extract_report_metadata
 import io
 
 # Page configuration
@@ -59,7 +59,7 @@ def process_single_pbix(uploaded_file, file_name="Report"):
     """Process a single PBIX file and return the data"""
     try:
         with st.spinner(f'🔄 Processing {file_name}...'):
-            report_data = extract_visuals_data(uploaded_file)
+            report_data = extract_report_metadata(uploaded_file)
         return report_data
     except Exception as e:
         st.error(f"❌ Error processing {file_name}: {str(e)}")
