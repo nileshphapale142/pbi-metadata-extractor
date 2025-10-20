@@ -66,6 +66,7 @@ def process_single_pbix(uploaded_file, file_name="Report"):
         return None
 
 
+# Update the calculate_report_metrics function (around line 77)
 def calculate_report_metrics(report_data):
     """Calculate advanced metrics for a report including complexity score"""
     summary = report_data.get("summary", {})
@@ -76,6 +77,12 @@ def calculate_report_metrics(report_data):
     
     # Count measures
     measures_count = len(df_visuals[df_visuals['Is Measure'] == 'Yes']) if not df_visuals.empty else 0
+    
+    # Count slicers
+    slicers_count = 0
+    if not df_visuals.empty:
+        slicer_visuals = df_visuals[df_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
+        slicers_count = slicer_visuals['Visual ID'].nunique()
     
     # Count unique tables (from Field Query Name which has format like "Sum(TableName[Column])" or "TableName.Column")
     unique_tables = set()
@@ -129,7 +136,7 @@ def calculate_report_metrics(report_data):
             total_filters += len(visual_filters.split(' | '))
     
     # Calculate Complexity Score
-    # Formula: (Pages * 10) + (Visuals * 5) + (Fields * 2) + (Measures * 3) + (Tables * 8) + (Filters * 4)
+    # Formula: (Pages * 10) + (Visuals * 5) + (Fields * 2) + (Measures * 3) + (Tables * 8) + (Filters * 4) + (Slicers * 2)
     # Weighted to reflect complexity impact
     total_pages = summary.get("Total Pages", 0)
     total_visuals = summary.get("Total Visuals", 0)
@@ -141,7 +148,8 @@ def calculate_report_metrics(report_data):
         (total_fields * 2) +
         (measures_count * 3) +
         (tables_count * 8) +
-        (total_filters * 4)
+        (total_filters * 4) +
+        (slicers_count * 2)
     )
     
     # Determine complexity level
@@ -156,12 +164,14 @@ def calculate_report_metrics(report_data):
     
     return {
         "measures_count": measures_count,
+        "slicers_count": slicers_count,
         "tables_count": tables_count,
         "total_filters": total_filters,
         "complexity_score": complexity_score,
         "complexity_level": complexity_level,
         "unique_tables": list(unique_tables)  # For debugging
     }
+
 
 def display_report_data(report_data, report_name="Report"):
     """Display report data in tabs"""
@@ -608,17 +618,20 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Very High": "🔴 Very High"
                 }
                 
+# Update the comparison_data.append section (around line 581)
                 comparison_data.append({
                     "Report Name": report_name,
                     "Total Pages": summary.get("Total Pages", 0),
                     "Total Visuals": summary.get("Total Visuals", 0),
                     "Total Fields": len(visuals),
                     "Measures": metrics["measures_count"],
-                    "Tables": metrics["tables_count"],
+                    "Slicers": metrics["slicers_count"],
+                    "Used Data Tables": metrics["tables_count"],
                     "Total Filters": metrics["total_filters"],
                     "Complexity Score": metrics["complexity_score"],
                     "Complexity": complexity_emojis.get(metrics["complexity_level"], metrics["complexity_level"])
                 })
+
             
 # Replace the comparison summary display section (around line 543-578)
             df_comparison = pd.DataFrame(comparison_data)
@@ -633,10 +646,11 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Total Visuals": st.column_config.NumberColumn("Visuals", width="small"),
                     "Total Fields": st.column_config.NumberColumn("Fields", width="small"),
                     "Measures": st.column_config.NumberColumn("Measures", width="small"),
-                    "Tables": st.column_config.NumberColumn("Tables", width="small"),
+                    "Slicers": st.column_config.NumberColumn("Slicers", width="small"),
+                    "Used Data Tables": st.column_config.NumberColumn("Used Data Tables", width="small"),
                     "Total Filters": st.column_config.NumberColumn("Filters", width="small"),
-                    "Complexity Score": st.column_config.NumberColumn("Complexity Score", width="small"),
-                    "Complexity": st.column_config.TextColumn("Complexity Level", width="small"),
+                    "Complexity Score": st.column_config.NumberColumn("Score", width="small"),
+                    "Complexity": st.column_config.TextColumn("Level", width="small"),
                 }
             )
             
