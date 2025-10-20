@@ -40,7 +40,7 @@ A comprehensive Streamlit-based web application for extracting and analyzing met
 
 1. **Clone or download this repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/nileshphapale142/pbi-metadata-extractor.git
    cd pbi-metadata-extractor
    ```
 
@@ -58,7 +58,7 @@ A comprehensive Streamlit-based web application for extracting and analyzing met
 
 1. **Clone or download this repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/nileshphapale142/pbi-metadata-extractor.git
    cd pbi-metadata-extractor
    ```
 
