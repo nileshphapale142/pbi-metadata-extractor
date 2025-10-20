@@ -1,9 +1,6 @@
 # Python virtual environment
 .venv/
 
-# Log files
-output.log
-
 # Python cache
 **/__pycache__/
 

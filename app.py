@@ -188,7 +188,7 @@ def display_report_data(report_data, report_name="Report"):
         if not df_pages.empty:
             st.dataframe(
                 df_pages,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "Page Name": st.column_config.TextColumn("Page Name", width="medium"),
@@ -224,7 +224,7 @@ def display_report_data(report_data, report_name="Report"):
                 
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.dataframe(page_visual_types, use_container_width=True, hide_index=True)
+                    st.dataframe(page_visual_types, width="stretch", hide_index=True)
                 with col2:
                     st.bar_chart(page_visual_types.set_index('Visual Type'))
         else:
@@ -309,13 +309,13 @@ def display_report_data(report_data, report_name="Report"):
                             'Field Display Name', 'Field Query Name', 'Field Type', 
                             'Field Format', 'Is Measure', 'Aggregation', 'Projection Type'
                         ]],
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True
                     )
         else:
             st.dataframe(
                 filtered_df.drop(columns=['Visual ID', 'Visual Filters'], errors='ignore'),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "Page Name": st.column_config.TextColumn("Page", width="small"),
@@ -430,7 +430,7 @@ def display_report_data(report_data, report_name="Report"):
             
             st.dataframe(
                 filtered_filters_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 column_config={
                     "Filter Level": st.column_config.TextColumn("Level", width="small"),
@@ -625,7 +625,7 @@ elif processing_mode == "📚 Multiple Files Comparison":
             
             st.dataframe(
                 df_comparison, 
-                use_container_width=True, 
+                width="stretch", 
                 hide_index=True,
                 column_config={
                     "Report Name": st.column_config.TextColumn("Report Name", width="large"),
