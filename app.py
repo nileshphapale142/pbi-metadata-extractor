@@ -66,55 +66,57 @@ def process_single_pbix(uploaded_file, file_name="Report"):
         return None
 
 
-# Update the calculate_report_metrics function (around line 77)
 def calculate_report_metrics(report_data):
     """Calculate advanced metrics for a report including complexity score"""
     summary = report_data.get("summary", {})
     visuals = report_data.get("visuals", [])
     pages = report_data.get("pages", [])
+    static_elements = report_data.get("static_elements", [])
     
     df_visuals = pd.DataFrame(visuals)
     
     # Count measures
     measures_count = len(df_visuals[df_visuals['Is Measure'] == 'Yes']) if not df_visuals.empty else 0
     
-    # Count slicers
-    slicers_count = 0
+    # Count slicers - separate direct and indirect
+    direct_slicers_count = 0
+    indirect_slicers_count = 0
     if not df_visuals.empty:
         slicer_visuals = df_visuals[df_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
-        slicers_count = slicer_visuals['Visual ID'].nunique()
+        if not slicer_visuals.empty:
+            # Direct slicers (not hidden)
+            direct_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'No']
+            direct_slicers_count = direct_slicers['Visual ID'].nunique()
+            
+            # Indirect slicers (hidden)
+            indirect_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'Yes']
+            indirect_slicers_count = indirect_slicers['Visual ID'].nunique()
     
-    # Count unique tables (from Field Query Name which has format like "Sum(TableName[Column])" or "TableName.Column")
+    slicers_count = direct_slicers_count + indirect_slicers_count
+    
+    # Count unique tables
     unique_tables = set()
     if not df_visuals.empty:
         for query_name in df_visuals['Field Query Name'].dropna():
             query_name = str(query_name).strip()
             
-            # Handle format: TableName[Column] or Sum(TableName[Column])
             if '[' in query_name:
-                # Extract table name before the bracket
-                # Remove any aggregation functions first
                 clean_name = query_name
                 if '(' in clean_name:
-                    # Extract content between ( and )
                     start = clean_name.find('(')
                     end = clean_name.rfind(')')
                     if start != -1 and end != -1:
                         clean_name = clean_name[start+1:end]
                 
-                # Now extract table name before [
                 if '[' in clean_name:
                     table = clean_name.split('[')[0].strip()
-                    if table and not table.startswith('_'):  # Exclude system tables
+                    if table and not table.startswith('_'):
                         unique_tables.add(table)
             
-            # Handle format: TableName.Column
             elif '.' in query_name and not query_name.startswith('.'):
-                # Split by the last dot to separate table from column
                 parts = query_name.rsplit('.', 1)
                 if len(parts) == 2:
                     table = parts[0].strip()
-                    # Remove any aggregation function prefix
                     if '(' in table:
                         table = table.split('(')[-1]
                     if table and not table.startswith('_'):
@@ -135,9 +137,10 @@ def calculate_report_metrics(report_data):
         if visual_filters:
             total_filters += len(visual_filters.split(' | '))
     
+    # Count static elements
+    static_elements_count = len(static_elements)
+    
     # Calculate Complexity Score
-    # Formula: (Pages * 10) + (Visuals * 5) + (Fields * 2) + (Measures * 3) + (Tables * 8) + (Filters * 4) + (Slicers * 2)
-    # Weighted to reflect complexity impact
     total_pages = summary.get("Total Pages", 0)
     total_visuals = summary.get("Total Visuals", 0)
     total_fields = len(visuals)
@@ -149,7 +152,8 @@ def calculate_report_metrics(report_data):
         (measures_count * 3) +
         (tables_count * 8) +
         (total_filters * 4) +
-        (slicers_count * 2)
+        (slicers_count * 2) +
+        (static_elements_count * 1)  # Static elements add minimal complexity
     )
     
     # Determine complexity level
@@ -165,12 +169,16 @@ def calculate_report_metrics(report_data):
     return {
         "measures_count": measures_count,
         "slicers_count": slicers_count,
+        "direct_slicers_count": direct_slicers_count,
+        "indirect_slicers_count": indirect_slicers_count,
         "tables_count": tables_count,
         "total_filters": total_filters,
+        "static_elements_count": static_elements_count,
         "complexity_score": complexity_score,
         "complexity_level": complexity_level,
-        "unique_tables": list(unique_tables)  # For debugging
+        "unique_tables": list(unique_tables)
     }
+
 
 
 def display_report_data(report_data, report_name="Report"):
@@ -206,6 +214,7 @@ def display_report_data(report_data, report_name="Report"):
                     "Page Filters": st.column_config.TextColumn("Page Filters", width="large")
                 }
             )
+
             
             st.divider()
             st.subheader("🔍 Page Drill-Down")
@@ -258,6 +267,50 @@ def display_report_data(report_data, report_name="Report"):
                     st.dataframe(page_visual_types, width="stretch", hide_index=True)
                 with col2:
                     st.bar_chart(page_visual_types.set_index('Visual Type'))
+
+                                # Show static elements table
+                if not df_pages.empty:
+                    page_static = report_data.get("static_elements", [])
+                    if page_static:
+                        df_static = pd.DataFrame(page_static)
+                        page_static_elements = df_static[df_static['Page Name'] == selected_page]
+                        
+                        if not page_static_elements.empty:
+                            st.divider()
+                            st.markdown("**Static Elements on this page:**")
+                            
+                            # Show count summary by element type
+                            static_counts = page_static_elements.groupby('Element Type').size().reset_index(name='Count')
+                            static_counts = static_counts.sort_values('Count', ascending=False)
+                            
+                            col1, col2 = st.columns([1, 2])
+                            with col1:
+                                st.markdown("*Element Type Summary:*")
+                                st.dataframe(
+                                    static_counts,
+                                    width="stretch",
+                                    hide_index=True,
+                                    column_config={
+                                        "Element Type": st.column_config.TextColumn("Type", width="medium"),
+                                        "Count": st.column_config.NumberColumn("Count", width="small")
+                                    }
+                                )
+                            with col2:
+                                st.bar_chart(static_counts.set_index('Element Type'))
+                            
+                            st.divider()
+                            st.markdown("*Detailed Static Elements:*")
+                            st.dataframe(
+                                page_static_elements[['Element Type', 'Title', 'Hidden', 'Content Preview']],
+                                width="stretch",
+                                hide_index=True,
+                                column_config={
+                                    "Element Type": st.column_config.TextColumn("Type", width="small"),
+                                    "Title": st.column_config.TextColumn("Title", width="medium"),
+                                    "Hidden": st.column_config.TextColumn("Hidden", width="small"),
+                                    "Content Preview": st.column_config.TextColumn("Preview", width="large")
+                                }
+                            )
         else:
             st.info("No page data available")
     
@@ -656,9 +709,11 @@ elif processing_mode == "📚 Multiple Files Comparison":
                     "Report Name": report_name,
                     "Total Pages": summary.get("Total Pages", 0),
                     "Total Visuals": summary.get("Total Visuals", 0),
+                    "Static Elements": metrics["static_elements_count"],
                     "Total Fields": len(visuals),
                     "Measures": metrics["measures_count"],
-                    "Slicers": metrics["slicers_count"],
+                    "Direct Slicers": metrics["direct_slicers_count"],
+                    "Indirect Slicers": metrics["indirect_slicers_count"],
                     "Used Data Tables": metrics["tables_count"],
                     "Total Filters": metrics["total_filters"],
                     "Complexity Score": metrics["complexity_score"],
@@ -673,13 +728,15 @@ elif processing_mode == "📚 Multiple Files Comparison":
                 df_comparison, 
                 width="stretch", 
                 hide_index=True,
-                column_config={
+                                column_config={
                     "Report Name": st.column_config.TextColumn("Report Name", width="large"),
                     "Total Pages": st.column_config.NumberColumn("Pages", width="small"),
                     "Total Visuals": st.column_config.NumberColumn("Visuals", width="small"),
+                    "Static Elements": st.column_config.NumberColumn("Static", width="small"),
                     "Total Fields": st.column_config.NumberColumn("Fields", width="small"),
                     "Measures": st.column_config.NumberColumn("Measures", width="small"),
-                    "Slicers": st.column_config.NumberColumn("Slicers", width="small"),
+                    "Direct Slicers": st.column_config.NumberColumn("Direct Slicers", width="small"),
+                    "Indirect Slicers": st.column_config.NumberColumn("Indirect Slicers", width="small"),
                     "Used Data Tables": st.column_config.NumberColumn("Used Data Tables", width="small"),
                     "Total Filters": st.column_config.NumberColumn("Filters", width="small"),
                     "Complexity Score": st.column_config.NumberColumn("Score", width="small"),

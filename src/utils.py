@@ -1,5 +1,25 @@
 from src.constants import POWERBI_TYPE_CODES 
 
+
+
+def is_static_element(visual_type):
+    """Check if a visual is a static element (non-data visual)"""
+    static_element_types = [
+        'textbox',
+        'shape',
+        'image',
+        'button',
+        'actionButton',
+        'rectangle',
+        'line',
+        'htmlContent',
+        'iconShape'
+    ]
+    
+    visual_type_lower = visual_type.lower()
+    return any(static_type in visual_type_lower for static_type in static_element_types)
+
+
 def clean_text(text):
     """
     Remove invisible Unicode characters like Left-to-Right Mark, Right-to-Left Mark, etc.
