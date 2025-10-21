@@ -5,7 +5,7 @@ from datetime import datetime
 
 from src.utils import clean_text, get_type_name
 from src.filters import extract_filters, format_filters_for_display
-from src.visuals import parse_visual_containers
+from src.visuals import parse_visual_containers, is_visual_hidden
 
 
 def extract_report_metadata(pbix_file_path):
@@ -206,6 +206,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Type": visual_type,
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": field["display_name"],
@@ -235,6 +236,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Type": visual_type,
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": "",
@@ -411,8 +413,8 @@ def extract_pbix_contents(
 # Example usage
 if __name__ == "__main__":
     # Specify your PBIX file path
-    pbix_path = "./data/Components requirements next 12 weeks by ORDERING plant.pbix"
-    output_log = "output.log"
-    output_csv = "visuals_data.csv"
+    pbix_path = "dump\data\Components requirements next 12 weeks by ORDERING plant - Copy.pbix"
+    output_log = "dump\logs\output.log"
+    output_csv = "dump\visuals_data.csv"
 
     extract_pbix_contents(pbix_path, output_log, output_csv)

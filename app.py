@@ -229,8 +229,29 @@ def display_report_data(report_data, report_name="Report"):
                     st.metric("Measures Used", measures_count)
                 
                 st.markdown("**Visuals on this page:**")
-                page_visual_types = page_visuals.groupby('Visual Type')['Visual ID'].nunique().reset_index()
+                
+                # Separate slicers into direct and indirect
+                slicer_visuals = page_visuals[page_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
+                direct_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'No']['Visual ID'].nunique()
+                indirect_slicers = slicer_visuals[slicer_visuals['Hidden'] == 'Yes']['Visual ID'].nunique()
+                
+                # Get non-slicer visual counts
+                non_slicer_visuals = page_visuals[~page_visuals['Visual Type'].str.lower().str.contains('slicer', na=False)]
+                page_visual_types = non_slicer_visuals.groupby('Visual Type')['Visual ID'].nunique().reset_index()
                 page_visual_types.columns = ['Visual Type', 'Count']
+                
+                # Add slicer rows
+                if direct_slicers > 0:
+                    page_visual_types = pd.concat([
+                        page_visual_types,
+                        pd.DataFrame([{'Visual Type': 'Slicer (Direct)', 'Count': direct_slicers}])
+                    ], ignore_index=True)
+                
+                if indirect_slicers > 0:
+                    page_visual_types = pd.concat([
+                        page_visual_types,
+                        pd.DataFrame([{'Visual Type': 'Slicer (Indirect)', 'Count': indirect_slicers}])
+                    ], ignore_index=True)
                 
                 col1, col2 = st.columns([1, 2])
                 with col1:
@@ -306,14 +327,25 @@ def display_report_data(report_data, report_name="Report"):
         if st.checkbox("Group by Visual", value=True, key=f"group_{report_name}"):
             unique_visuals = filtered_df.groupby(['Page Name', 'Visual ID', 'Visual Title', 'Visual Type']).size().reset_index(name='Field Count')
             
+# Update the grouped visual display to show Hidden status for slicers (around line 315)
             for idx, visual in unique_visuals.iterrows():
-                title_display = f"{visual['Visual Title']} ({visual['Visual Type']})" 
+                title_display = f"{visual['Visual Title']} ({visual['Visual Type']})"
+                
+                # Add hidden indicator for slicers
+                visual_data = filtered_df[
+                    (filtered_df['Page Name'] == visual['Page Name']) &
+                    (filtered_df['Visual ID'] == visual['Visual ID'])
+                ]
+                
+                is_slicer = 'slicer' in visual['Visual Type'].lower()
+                is_hidden = visual_data['Hidden'].iloc[0] == 'Yes' if not visual_data.empty else False
+                
+                if is_slicer and is_hidden:
+                    title_display += " [Indirect]"
+                elif is_slicer:
+                    title_display += " [Direct]"
+                
                 with st.expander(f"🔹 {title_display} on {visual['Page Name']} ({visual['Field Count']} fields)"):
-                    visual_data = filtered_df[
-                        (filtered_df['Page Name'] == visual['Page Name']) &
-                        (filtered_df['Visual ID'] == visual['Visual ID'])
-                    ]
-                    
                     st.dataframe(
                         visual_data[[
                             'Field Display Name', 'Field Query Name', 'Field Type', 
@@ -331,6 +363,7 @@ def display_report_data(report_data, report_name="Report"):
                     "Page Name": st.column_config.TextColumn("Page", width="small"),
                     "Visual Title": st.column_config.TextColumn("Title", width="medium"),
                     "Visual Type": st.column_config.TextColumn("Visual Type", width="small"),
+                    "Hidden": st.column_config.TextColumn("Hidden", width="small"),
                     "Field Display Name": st.column_config.TextColumn("Field", width="medium"),
                     "Field Type": st.column_config.TextColumn("Type", width="small"),
                     "Is Measure": st.column_config.TextColumn("Measure?", width="small"),
