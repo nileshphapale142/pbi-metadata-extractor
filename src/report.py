@@ -3,23 +3,23 @@ import os
 import json
 from datetime import datetime
 
-from src.utils import clean_text, get_type_name
+from src.utils import clean_text, get_type_name, is_static_element
 from src.filters import extract_filters, format_filters_for_display
-from src.visuals import parse_visual_containers
+from src.visuals import parse_visual_containers, is_visual_hidden
 
 
 def extract_report_metadata(pbix_file_path):
     """
-    Extract comprehensive report metadata including pages, visuals, and filters.
-
+    Extract comprehensive report metadata including pages, visuals, filters, and static elements.
+    
     Args:
         pbix_file_path: Path to the PBIX file or file-like object
-
+    
     Returns:
         Dictionary containing report metadata
     """
     try:
-        report_data = {"summary": {}, "pages": [], "visuals": []}
+        report_data = {"summary": {}, "pages": [], "visuals": [], "static_elements": []}
 
         # Open PBIX file as ZIP
         with zipfile.ZipFile(pbix_file_path, "r") as zip_ref:
@@ -56,6 +56,7 @@ def extract_report_metadata(pbix_file_path):
                 sections = layout_json.get("sections", [])
 
                 total_visuals = 0
+                total_static_elements = 0
 
                 # Process each page/section
                 for section_idx, section in enumerate(sections):
@@ -71,6 +72,7 @@ def extract_report_metadata(pbix_file_path):
 
                     page_visuals_count = 0
                     page_visuals_with_data = 0
+                    page_static_elements_count = 0
 
                     # Process each visual
                     for visual_idx, visual in enumerate(visual_containers):
@@ -78,6 +80,60 @@ def extract_report_metadata(pbix_file_path):
                         try:
                             config = json.loads(config_str)
                             single_visual = config.get("singleVisual", {})
+                            visual_type = clean_text(
+                                single_visual.get("visualType", "Unknown")
+                            )
+                            
+                            # Check if it's a static element
+                            if is_static_element(visual_type):
+                                page_static_elements_count += 1
+                                total_static_elements += 1
+                                
+                                visual_id = str(visual.get("id", f"visual_{visual_idx}"))
+                                
+                                # Extract visual title
+                                visual_title = "[No Title]"
+                                vc_objects = single_visual.get("vcObjects", {})
+                                if vc_objects and "title" in vc_objects:
+                                    title_settings = vc_objects["title"]
+                                    if isinstance(title_settings, list) and len(title_settings) > 0:
+                                        for title_obj in title_settings:
+                                            properties = title_obj.get("properties", {})
+                                            if "text" in properties:
+                                                text_expr = properties["text"].get("expr", {})
+                                                if "Literal" in text_expr:
+                                                    visual_title = clean_text(
+                                                        text_expr["Literal"]
+                                                        .get("Value", "[No Title]")
+                                                        .strip("'")
+                                                    )
+                                                    break
+                                
+                                # Try to extract text content for textbox
+                                text_content = ""
+                                if "textbox" in visual_type.lower():
+                                    if vc_objects and "general" in vc_objects:
+                                        general_settings = vc_objects["general"]
+                                        if isinstance(general_settings, list) and len(general_settings) > 0:
+                                            properties = general_settings[0].get("properties", {})
+                                            if "paragraphs" in properties:
+                                                paragraphs_expr = properties["paragraphs"].get("expr", {})
+                                                if "Literal" in paragraphs_expr:
+                                                    # Extract first 100 chars of text content
+                                                    text_content = str(paragraphs_expr["Literal"].get("Value", ""))[:100]
+                                
+                                static_element = {
+                                    "Page Name": page_name,
+                                    "Element ID": visual_id,
+                                    "Element Type": visual_type,
+                                    "Title": visual_title,
+                                    "Hidden": "Yes" if is_visual_hidden(visual) else "No",
+                                    "Content Preview": text_content if text_content else "N/A"
+                                }
+                                report_data["static_elements"].append(static_element)
+                                continue
+                            
+                            # Process regular data visuals
                             projections = single_visual.get("projections", {})
 
                             # Check if projections exist and are not empty
@@ -90,9 +146,6 @@ def extract_report_metadata(pbix_file_path):
                             total_visuals += 1
 
                             visual_id = str(visual.get("id", f"visual_{visual_idx}"))
-                            visual_type = clean_text(
-                                single_visual.get("visualType", "Unknown")
-                            )
 
                             # Extract visual title from vcObjects
                             visual_title = "[No Title]"
@@ -206,6 +259,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Type": visual_type,
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": field["display_name"],
@@ -235,6 +289,7 @@ def extract_report_metadata(pbix_file_path):
                                         "Page Name": page_name,
                                         "Visual ID": visual_id,
                                         "Visual Title": visual_title,
+                                        "Hidden": "Yes" if is_visual_hidden(visual) else "No",
                                         "Visual Type": visual_type,
                                         "Visual Filters": visual_filters_display,
                                         "Field Display Name": "",
@@ -255,6 +310,7 @@ def extract_report_metadata(pbix_file_path):
                     page_data = {
                         "Page Name": page_name,
                         "Visual Count": page_visuals_with_data,
+                        "Static Elements Count": page_static_elements_count,
                         "Page Filters": page_filters_display
                         if page_filters_display
                         else "None",
@@ -265,13 +321,13 @@ def extract_report_metadata(pbix_file_path):
                 report_data["summary"] = {
                     "Total Pages": len(sections),
                     "Total Visuals": total_visuals,
+                    "Total Static Elements": total_static_elements,
                 }
-
         return report_data
 
     except Exception as e:
         raise Exception(f"Error extracting report metadata: {str(e)}")
-
+    
 
 def extract_pbix_contents(
     pbix_file_path, output_log_path="output.log", output_csv_path="visuals_data.csv"
@@ -411,8 +467,8 @@ def extract_pbix_contents(
 # Example usage
 if __name__ == "__main__":
     # Specify your PBIX file path
-    pbix_path = "./data/Components requirements next 12 weeks by ORDERING plant.pbix"
-    output_log = "output.log"
-    output_csv = "visuals_data.csv"
+    pbix_path = "dump\data\Components requirements next 12 weeks by ORDERING plant - Copy.pbix"
+    output_log = "dump\logs\output.log"
+    output_csv = "dump\visuals_data.csv"
 
     extract_pbix_contents(pbix_path, output_log, output_csv)
