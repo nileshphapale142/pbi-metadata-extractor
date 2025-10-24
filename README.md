@@ -12,17 +12,27 @@ A comprehensive Streamlit-based web application for extracting and analyzing met
   - Fields and measures with data types
   - Aggregations and projections
   - Format information
+  - Slicer classification (Direct vs Indirect)
+  - Hidden status for visuals
+- **Static Elements**: Detection and analysis of non-data elements:
+  - Text boxes
+  - Images
+  - Shapes
+  - Buttons
+  - Content preview
 - **Filter Analysis**: Dedicated view of all page-level and visual-level filters
 - **Export Options**: Download results as CSV or Excel
 
 ### 📚 Multiple Files Comparison
 - Upload and compare multiple PBIX files side-by-side
-- Complexity scoring system with visual indicators
+- Enhanced complexity scoring system with visual indicators
 - Batch processing capabilities
 - Cross-report analysis metrics including:
   - Total pages and visuals
+  - Static elements count
   - Field and measure counts
-  - Table usage statistics
+  - Direct and indirect slicer counts
+  - Used data table statistics
   - Filter counts
   - Complexity scores (Low/Medium/High/Very High)
 
@@ -107,7 +117,11 @@ streamlit run app.py --server.port 8502
 3. **Wait for Processing**: The app will extract metadata from the file
 4. **Explore Results**: Navigate through four tabs:
    - **Page Overview**: Summary of pages and their visuals with drill-down capability
+     - Slicer breakdown (Direct vs Indirect)
+     - Static elements by type (text boxes, images, shapes, buttons)
    - **Visual Details**: Detailed field-level information with filtering options
+     - Slicer type indicators ([Direct] or [Indirect])
+     - Hidden status visibility
    - **Filters**: Comprehensive filter analysis with table-level insights
    - **Export Data**: Download results in CSV or Excel format
 
@@ -116,24 +130,81 @@ streamlit run app.py --server.port 8502
 1. **Select Processing Mode**: Choose "📚 Multiple Files Comparison" from the sidebar
 2. **Upload Files**: Select multiple .pbix files (hold Ctrl/Cmd for multiple selection)
 3. **View Comparison**: Review the comparison summary table showing:
-   - Report metrics (pages, visuals, fields, measures, tables, filters)
+   - Report metrics (pages, visuals, static elements, fields, measures)
+   - Slicer breakdown (direct and indirect slicers)
+   - Used data tables count
+   - Total filters
    - Complexity scores and levels
 4. **Drill Down**: Select any report to view detailed analysis
 5. **Export**: Download comparison summary as CSV
 
 ## 📊 Understanding Complexity Scores
 
-The app calculates a complexity score for each report using the following formula:
+The app calculates a comprehensive complexity score for each report using the following weighted formula:
 
 ```
-Complexity Score = (Pages × 10) + (Visuals × 5) + (Fields × 2) + (Measures × 3) + (Tables × 8) + (Filters × 4)
+Complexity Score = (Pages × 10) + (Visuals × 5) + (Fields × 2) + (Measures × 3) + 
+                   (Tables × 8) + (Filters × 4) + (Slicers × 2) + (Static Elements × 1)
 ```
+
+**Weighting Rationale:**
+- **Pages (×10)**: Multiple pages increase navigation complexity
+- **Visuals (×5)**: Each visual adds significant functional complexity
+- **Fields (×2)**: More fields mean more data relationships
+- **Measures (×3)**: DAX measures add calculation complexity
+- **Tables (×8)**: More tables increase data model complexity
+- **Filters (×4)**: Filters add interactivity and logic complexity
+- **Slicers (×2)**: Interactive filtering elements (both direct and indirect)
+- **Static Elements (×1)**: Minimal impact but counted for completeness
 
 **Complexity Levels:**
 - 🟢 **Low**: Score < 100 (Simple reports)
 - 🟡 **Medium**: Score 100-499 (Moderate complexity)
 - 🟠 **High**: Score 500-999 (Complex reports)
 - 🔴 **Very High**: Score ≥ 1000 (Highly complex reports)
+
+## 🎯 Understanding Slicer Types
+
+The application automatically distinguishes between two types of slicers:
+
+### Direct Slicers (Visible)
+- **Definition**: Slicers that are visible to end users on the report page
+- **Purpose**: Direct user interaction for filtering data
+- **Identification**: `Hidden = "No"` in the visual properties
+- **Display**: Labeled as `[Direct]` in the visual details
+
+### Indirect Slicers (Hidden)
+- **Definition**: Slicers that are hidden from view but still functional
+- **Purpose**: Often used for sync slicers across pages or programmatic filtering
+- **Identification**: `Hidden = "Yes"` in the visual properties
+- **Display**: Labeled as `[Indirect]` in the visual details
+- **Use Cases**:
+  - Synchronized filtering across multiple pages
+  - Bookmarked states
+  - Button-driven filtering logic
+
+## 📄 Static Elements Detection
+
+The application identifies and catalogs non-data visual elements:
+
+### Supported Static Element Types
+- **Text Boxes**: Labels, titles, descriptions, and annotations
+- **Images**: Logos, icons, background images
+- **Shapes**: Decorative elements, dividers, backgrounds
+- **Buttons**: Navigation buttons, action triggers
+
+### Static Element Information Captured
+- **Element Type**: Classification (textbox, image, shape, button)
+- **Title**: Element identifier or name
+- **Hidden Status**: Whether the element is visible or hidden
+- **Content Preview**: Text content or description (when available)
+- **Page Association**: Which page the element appears on
+
+### Benefits
+- **Complete Report Inventory**: Track all visual elements, not just data visuals
+- **Design Consistency**: Compare static elements across reports
+- **Documentation**: Understand report structure beyond data visualizations
+- **Maintenance**: Identify unused or hidden elements
 
 ## 🗂️ Project Structure
 
@@ -194,6 +265,26 @@ If processing large PBIX files causes memory issues:
 - Close other applications to free up memory
 - Consider increasing available system memory
 
+## 🆕 Latest Features (v0.1.0)
+
+### Slicer Classification
+- **Direct Slicers**: Visible slicers for direct user interaction
+- **Indirect Slicers**: Hidden slicers used for sync operations and programmatic filtering
+- **Visual Indicators**: Clear labeling in visual details ([Direct] or [Indirect])
+- **Separate Counts**: Both types tracked independently in comparison metrics
+
+### Static Elements Detection
+- **Comprehensive Tracking**: Text boxes, images, shapes, and buttons
+- **Content Preview**: See text content or element descriptions
+- **Page Association**: Know which page contains each static element
+- **Hidden Status**: Identify visible vs hidden static elements
+- **Type Distribution**: Visual breakdown of static elements by type
+
+### Enhanced Complexity Scoring
+- **Expanded Formula**: Now includes slicers and static elements
+- **Better Accuracy**: More comprehensive assessment of report complexity
+- **Detailed Breakdown**: See exactly what contributes to complexity score
+
 ## 📝 Notes
 
 - The application processes PBIX files locally - no data is sent to external servers
@@ -213,11 +304,34 @@ Built with Streamlit & ❤️ by Nilesh
 
 Contributions, issues, and feature requests are welcome!
 
+## 🆕 Latest Features (v0.1.0)
+
+### Slicer Classification
+- **Direct Slicers**: Visible slicers for direct user interaction
+- **Indirect Slicers**: Hidden slicers used for sync operations and programmatic filtering
+- **Visual Indicators**: Clear labeling in visual details ([Direct] or [Indirect])
+- **Separate Counts**: Both types tracked independently in comparison metrics
+
+### Static Elements Detection
+- **Comprehensive Tracking**: Text boxes, images, shapes, and buttons
+- **Content Preview**: See text content or element descriptions
+- **Page Association**: Know which page contains each static element
+- **Hidden Status**: Identify visible vs hidden static elements
+- **Type Distribution**: Visual breakdown of static elements by type
+
+### Enhanced Complexity Scoring
+- **Expanded Formula**: Now includes slicers and static elements
+- **Better Accuracy**: More comprehensive assessment of report complexity
+- **Detailed Breakdown**: See exactly what contributes to complexity score
+
 ## 🔮 Future Enhancements
 
-- DAX measure extraction
+- DAX measure extraction and formula analysis
 - Data model diagram visualization
-- Relationship analysis
+- Relationship analysis between tables
 - Performance optimization suggestions
 - Custom theme extraction
 - Bookmark and button action analysis
+- Drill-through action detection
+- Tooltip page identification
+- RLS (Row-Level Security) configuration details
